@@ -23,25 +23,25 @@ button:focus, button:active, button:hover {
 }
 
 #lock {
-    background-image: image(url("~/.config/wlogout/icons/1.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/1.png"));
 }
 
 #logout {
-    background-image: image(url("~/.config/wlogout/icons/2.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/2.png"));
 }
 
 #suspend {
-    background-image: image(url("~/.config/wlogout/icons/3.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/3.png"));
 }
 
 #hibernate {
-    background-image: image(url("~/.config/wlogout/icons/4.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/4.png"));
 }
 
 #shutdown {
-    background-image: image(url("~/.config/wlogout/icons/5.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/5.png"));
 }
 
 #reboot {
-    background-image: image(url("~/.config/wlogout/icons/6.png"));
+    background-image: image(url("/HOME_DIR/.config/wlogout/icons/6.png"));
 }

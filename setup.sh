@@ -34,7 +34,7 @@ echo ""
 step "1/10 · Installing APT packages"
 sudo apt update
 sudo apt install -y \
-    hyprland waybar kitty rofi mako-notifier swaybg swaylock swayosd gtklock \
+    hyprland waybar kitty rofi mako-notifier swaylock swayosd gtklock \
     grim slurp wl-clipboard cliphist \
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
     sway-notification-center swayidle wf-recorder wlogout \
@@ -74,7 +74,7 @@ if ls "$FONT_DIR"/JetBrainsMonoNerd* &>/dev/null; then
     warn "JetBrainsMono Nerd Font already installed, skipping"
 else
     mkdir -p "$FONT_DIR"
-    NERD_VERSION="v3.3.0"
+    NERD_VERSION="v3.4.0"
     curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_VERSION}/JetBrainsMono.tar.xz" -o /tmp/JetBrainsMono.tar.xz
     tar -xf /tmp/JetBrainsMono.tar.xz -C "$FONT_DIR"
     rm -f /tmp/JetBrainsMono.tar.xz
@@ -96,9 +96,9 @@ step "6/10 · Installing Dracula icon theme"
 if [ -d "$HOME/.icons/Dracula" ]; then
     warn "Dracula icon theme already installed, skipping"
 else
-    git clone https://github.com/dracula/icons.git /tmp/dracula-icons
-    mkdir -p "$HOME/.icons"
-    cp -r /tmp/dracula-icons "$HOME/.icons/Dracula"
+    git clone https://github.com/m4thewz/dracula-icons.git /tmp/dracula-icons
+    mkdir -p "$HOME/.icons/Dracula"
+    cp -r /tmp/dracula-icons/* "$HOME/.icons/Dracula/"
     rm -rf /tmp/dracula-icons
 fi
 success "Dracula icon theme ready"
@@ -133,6 +133,10 @@ done
 mkdir -p "$HOME/.local/share/rofi/themes"
 cp "$SCRIPT_DIR/configs/rofi/spotlight-dark.rasi" "$HOME/.local/share/rofi/themes/spotlight-dark.rasi"
 info "→ ~/.local/share/rofi/themes/spotlight-dark.rasi"
+
+# Fix wlogout icon paths (CSS doesn't expand ~ so we use absolute paths)
+sed -i "s|/HOME_DIR|$HOME|g" "$HOME/.config/wlogout/style.css"
+info "→ Fixed wlogout icon paths for $HOME"
 
 success "Config files deployed"
 
