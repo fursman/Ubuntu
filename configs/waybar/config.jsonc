@@ -1,0 +1,160 @@
+[{
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "modules-left": ["hyprland/workspaces", "wlr/taskbar"],
+    "modules-center": ["hyprland/window"],
+    "modules-right": ["tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "clock#date", "clock#time", "custom/media", "custom/notification"],
+
+    "custom/media": {
+        "exec": "playerctl metadata --format '{\"text\": \"{{artist}} — {{title}}\", \"tooltip\": \"{{playerName}}: {{artist}} — {{title}}\", \"alt\": \"{{status}}\", \"class\": \"{{status}}\"}' --follow 2>/dev/null",
+        "return-type": "json",
+        "format": "󰎈 {}",
+        "max-length": 30,
+        "on-click": "playerctl play-pause",
+        "on-scroll-up": "playerctl next",
+        "on-scroll-down": "playerctl previous"
+    },
+
+    "custom/notification": {
+        "tooltip": false,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "󰂚",
+            "none": "󰂜",
+            "dnd-notification": "󰂛",
+            "dnd-none": "󰪑",
+            "inhibited-notification": "󰂚",
+            "inhibited-none": "󰂜",
+            "dnd-inhibited-notification": "󰂛",
+            "dnd-inhibited-none": "󰪑"
+        },
+        "return-type": "json",
+        "exec": "swaync-client -swb",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw",
+        "escape": true
+    },
+
+    "hyprland/workspaces": {
+        "on-click": "activate",
+        "format": "{icon}",
+        "format-icons": {
+            "1": "󰆍 ",
+            "2": "󰈹 ",
+            "3": "󰚩 ",
+            "4": "󰉋 ",
+            "5": "󰝚 ",
+            "6": "󰭹 ",
+            "7": "󰕧 ",
+            "8": "󰊴 ",
+            "9": "☂ ",
+            "10": "⚑ "
+        },
+        "persistent-workspaces": {
+            "eDP-1": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        }
+    },
+
+    "wlr/taskbar": {
+        "on-click": "activate",
+        "on-click-middle": "close"
+    },
+
+    "bluetooth": {
+        "format": "󰂯 {status}",
+        "format-connected": "󰂯 {device_alias}",
+        "format-connected-battery": "󰂯 {device_alias} {device_battery_percentage}%",
+        "tooltip-format": "{controller_alias}\t{controller_address}\n\n{num_connections} connected",
+        "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
+        "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
+        "on-click": "gnome-control-center bluetooth"
+    },
+
+    "disk": {
+        "interval": 30,
+        "format": "󰋊 {percentage_used}%",
+        "path": "/"
+    },
+
+    "backlight": {
+        "format": "{icon} {percent}%",
+        "format-icons": ["󰃞", "󰃟", "󰃠"]
+    },
+
+    "battery": {
+        "interval": 10,
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "󰂄 {capacity}%",
+        "format-charging": "󰂄 {capacity}%",
+        "format-full": "󰁹 {capacity}%",
+        "format-discharging": "{icon} {capacity}%",
+        "format-icons": ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+        "tooltip": true
+    },
+
+    "clock#time": {
+        "interval": 1,
+        "format": "󰥔 {:%H:%M:%S}",
+        "tooltip": false
+    },
+
+    "clock#date": {
+        "interval": 10,
+        "format": "󰃭 {:%e %b %Y}",
+        "tooltip-format": "{:%e %B %Y}"
+    },
+
+    "cpu": {
+        "interval": 5,
+        "format": "󰍛 {usage}%",
+        "states": {
+            "warning": 70,
+            "critical": 90
+        }
+    },
+
+    "memory": {
+        "interval": 5,
+        "format": "󰘚 {}%",
+        "states": {
+            "warning": 70,
+            "critical": 90
+        }
+    },
+
+    "network": {
+        "interval": 5,
+        "format-wifi": "󰖩 {essid} {ipaddr} 󰁅 {bandwidthDownBytes} 󰁝 {bandwidthUpBytes}",
+        "format-ethernet": "󰈀 {ifname} {ipaddr} 󰁅 {bandwidthDownBytes} 󰁝 {bandwidthUpBytes}",
+        "format-disconnected": "󰖪 Disconnected",
+        "tooltip-format": "{ifname}: {ipaddr}\n{essid} ({signalStrength}%)",
+        "on-click": "gnome-control-center wifi"
+    },
+
+    "pulseaudio": {
+        "scroll-step": 1,
+        "format": "{icon} {volume}%",
+        "format-bluetooth": "{icon} {volume}%",
+        "format-muted": "󰖁",
+        "format-icons": {
+            "headphones": "󰋋",
+            "handsfree": "󰋋",
+            "headset": "󰋋",
+            "phone": "󰏲",
+            "portable": "󰏲",
+            "car": "󰆍",
+            "default": ["󰕿", "󰕿", "󰖀", "󰕾"]
+        }
+    },
+
+    "temperature": {
+        "critical-threshold": 80,
+        "interval": 5,
+        "format": "󰔏 {temperatureC}°C"
+    }
+}]

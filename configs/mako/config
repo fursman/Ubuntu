@@ -1,0 +1,11 @@
+width=600
+background-color=#282a36
+text-color=#F8F8F2
+border-color=#BD93F9
+default-timeout=5000
+[urgency=low]
+border-color=#8BE9FD
+[urgency=normal]
+border-color=#BD93F9
+[urgency=high]
+border-color=#FF5555

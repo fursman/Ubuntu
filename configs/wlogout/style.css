@@ -1,0 +1,47 @@
+* {
+    background-image: none;
+}
+window {
+    background-color: rgba(12, 12, 12, 0.9);
+}
+button {
+    color: #FFFFFF;
+    background-color: #1E1E30;
+    border-style: solid;
+    border-width: 5px;
+    margin: 10px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 45%;
+}
+
+button:focus, button:active, button:hover {
+    background-color: #000000;
+    border-width: 5px;
+    border-color: #47AFC4;
+    outline-style: none;
+}
+
+#lock {
+    background-image: image(url("~/.config/wlogout/icons/1.png"));
+}
+
+#logout {
+    background-image: image(url("~/.config/wlogout/icons/2.png"));
+}
+
+#suspend {
+    background-image: image(url("~/.config/wlogout/icons/3.png"));
+}
+
+#hibernate {
+    background-image: image(url("~/.config/wlogout/icons/4.png"));
+}
+
+#shutdown {
+    background-image: image(url("~/.config/wlogout/icons/5.png"));
+}
+
+#reboot {
+    background-image: image(url("~/.config/wlogout/icons/6.png"));
+}

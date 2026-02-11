@@ -1,0 +1,47 @@
+/* Dracula-themed gtklock */
+window {
+    background-size: cover;
+    background-position: center;
+}
+
+#clock-label {
+    font-size: 96px;
+    font-weight: bold;
+    color: #f8f8f2;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-bottom: 16px;
+}
+
+#date-label {
+    font-size: 28px;
+    color: #bd93f9;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    margin-bottom: 48px;
+}
+
+#input-field {
+    background-color: rgba(40, 42, 54, 0.8);
+    color: #f8f8f2;
+    border: 2px solid #bd93f9;
+    border-radius: 12px;
+    font-size: 18px;
+    padding: 12px 24px;
+    min-width: 300px;
+}
+
+#input-field:focus {
+    border-color: #50fa7b;
+    box-shadow: 0 0 8px rgba(80, 250, 123, 0.3);
+}
+
+#message-label {
+    color: #ff5555;
+    font-size: 16px;
+    margin-top: 8px;
+}
+
+#body {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 24px;
+    padding: 48px;
+}

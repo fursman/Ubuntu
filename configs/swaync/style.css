@@ -1,0 +1,112 @@
+/* Dracula-themed swaync */
+@define-color bg #282a36;
+@define-color fg #f8f8f2;
+@define-color selection #44475a;
+@define-color comment #6272a4;
+@define-color cyan #8be9fd;
+@define-color green #50fa7b;
+@define-color orange #ffb86c;
+@define-color pink #ff79c6;
+@define-color purple #bd93f9;
+@define-color red #ff5555;
+@define-color yellow #f1fa8c;
+
+* {
+    font-family: "JetBrains Mono", "Symbols Nerd Font", monospace;
+    font-weight: bold;
+}
+
+.control-center {
+    background: alpha(@bg, 0.9);
+    border: 2px solid @comment;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.control-center .notification-row {
+    border-radius: 10px;
+}
+
+.notification-row {
+    outline: none;
+}
+
+.notification {
+    background: alpha(@selection, 0.8);
+    border: 1px solid @comment;
+    border-radius: 10px;
+    margin: 5px;
+    padding: 0;
+}
+
+.notification-content {
+    padding: 10px;
+}
+
+.summary {
+    color: @cyan;
+    font-size: 14px;
+}
+
+.body {
+    color: @fg;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.time {
+    color: @comment;
+    font-size: 11px;
+}
+
+.close-button {
+    background: @red;
+    color: @bg;
+    border-radius: 50%;
+    min-width: 24px;
+    min-height: 24px;
+    margin: 5px;
+}
+
+.close-button:hover {
+    background: lighter(@red);
+}
+
+.widget-title {
+    color: @purple;
+    font-size: 18px;
+    margin: 5px;
+}
+
+.widget-title button {
+    background: @purple;
+    color: @bg;
+    border-radius: 8px;
+    padding: 4px 12px;
+    border: none;
+}
+
+.widget-title button:hover {
+    background: lighter(@purple);
+}
+
+.widget-dnd {
+    color: @fg;
+    margin: 5px;
+    padding: 5px;
+}
+
+.widget-dnd > switch {
+    background: @selection;
+    border-radius: 12px;
+    border: 1px solid @comment;
+}
+
+.widget-dnd > switch:checked {
+    background: @purple;
+}
+
+.widget-dnd > switch slider {
+    background: @fg;
+    border-radius: 50%;
+}

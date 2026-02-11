@@ -1,0 +1,4 @@
+#!/bin/bash
+TMPIMG="/tmp/lockscreen-bg.png"
+grim -t png -s 0.25 "$TMPIMG" && convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
+gtklock -d -s ~/.config/gtklock/style.css -b "$TMPIMG" -H -T 5

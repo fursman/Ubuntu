@@ -1,0 +1,55 @@
+#!/bin/bash
+# Hyprland Keybind Cheatsheet — displayed in rofi
+
+cat << 'EOF' | rofi -dmenu -i -theme spotlight-dark -p "⌨ Keybinds" -no-custom -markup-rows
+<b>━━━ Apps ━━━</b>
+Super + Enter          App Launcher (Rofi)
+Super + T              Terminal (Kitty)
+Super + B              Firefox
+Super + Alt + B        Chromium
+Super + F              File Manager (Thunar)
+Super + A              Audio Settings
+Super + K              Passwords (Seahorse)
+<b>━━━ Windows ━━━</b>
+Super + Q              Close Window
+Super + Escape         Fullscreen
+Super + Shift + F      Toggle Floating
+Super + Shift + P      Pin (Always on Top)
+Super + Shift + Space  Center Window
+Super + P              Pseudo-tile
+Super + J              Toggle Split
+Super + G              Group/Tab Windows
+Super + Tab            Cycle Grouped Windows
+<b>━━━ Move / Resize ━━━</b>
+Super + Arrow          Focus Direction
+Super + Shift + Arrow  Move Window
+Super + Ctrl + Arrow   Resize Window
+Super + Drag LMB       Move Window (Mouse)
+Super + Drag RMB       Resize Window (Mouse)
+<b>━━━ Workspaces ━━━</b>
+Super + 1-0            Switch Workspace
+Super + Shift + 1-0    Move to Workspace
+Super + Alt + 1-5      Move Silently
+Super + Scroll          Cycle Workspaces
+3-Finger Swipe         Swipe Workspaces
+<b>━━━ Scratchpad ━━━</b>
+Super + `              Dropdown Terminal
+<b>━━━ Screenshots / Recording ━━━</b>
+Print                  Full Screen → Clipboard
+Super + F12            Full Screen → File
+Super + Shift + S      Region → Clipboard
+Super + Shift + F12    Region → File
+Super + Shift + R      Record Region (toggle)
+Super + Alt + R        Record Full Screen (toggle)
+<b>━━━ Utilities ━━━</b>
+Super + V              Clipboard History
+Super + N              Notification Center
+Super + Shift + C      Color Picker
+Super + L              Lock Screen
+Super + X              Logout Menu
+<b>━━━ Media ━━━</b>
+Play/Pause Key         Play / Pause
+Next/Prev Key          Next / Previous Track
+Volume Keys            Volume Up / Down / Mute
+Brightness Keys        Brightness Up / Down
+EOF
