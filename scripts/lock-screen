@@ -1,4 +1,25 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+
 TMPIMG="/tmp/lockscreen-bg.png"
-grim -t png -s 0.25 "$TMPIMG" && convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
-gtklock -d -s ~/.config/gtklock/style.css -b "$TMPIMG" -H -T 5
+
+# Create a blurred screenshot background for swaylock
+if command -v grim >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
+  grim -t png -s 0.25 "$TMPIMG" && \
+    convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
+fi
+
+# Prefer swaylock for better stability with DPMS resume on this GPU stack
+if command -v swaylock >/dev/null 2>&1; then
+  exec swaylock \
+    --image "$TMPIMG" \
+    --indicator \
+    --clock \
+    --grace 2 \
+    --fade-in 0.2 \
+    --effect-blur 8x4 \
+    --effect-vignette 0.6:0.6
+fi
+
+# Fallback
+exec gtklock -d -s ~/.config/gtklock/style.css -b "$TMPIMG" -H -T 5
