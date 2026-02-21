@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v blueman-manager >/dev/null 2>&1; then
+  exec blueman-manager
+elif command -v gnome-control-center >/dev/null 2>&1; then
+  exec gnome-control-center bluetooth
+else
+  echo "No bluetooth settings app found" >&2
+  exit 1
+fi

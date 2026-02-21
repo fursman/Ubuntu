@@ -41,7 +41,7 @@ sudo apt install -y \
     thunar thunar-volman pavucontrol \
     brightnessctl playerctl pamixer \
     btop fastfetch mpv vlc imagemagick \
-    gnome-keyring seahorse network-manager-gnome \
+    gnome-keyring seahorse network-manager-gnome blueman \
     papirus-icon-theme fonts-jetbrains-mono \
     espeak portaudio19-dev libportaudio2 python3-dev python3-venv \
     git curl wget flatpak hyprpaper
@@ -156,6 +156,19 @@ if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
     info "Added ~/.local/bin to PATH in .bashrc"
 fi
 success "Helper scripts installed"
+
+# Basic launcher sanity checks
+if command -v open-network-settings &>/dev/null; then
+    success "Network launcher installed"
+else
+    warn "Network launcher not found in PATH yet (new shell may be needed)"
+fi
+
+if command -v open-bluetooth-settings &>/dev/null; then
+    success "Bluetooth launcher installed"
+else
+    warn "Bluetooth launcher not found in PATH yet (new shell may be needed)"
+fi
 
 # ── Step 9: GTK theme settings ──
 step "9/10 · Setting GTK theme"

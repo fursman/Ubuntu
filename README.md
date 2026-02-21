@@ -34,8 +34,8 @@ Transform a fresh Ubuntu 25.10 install into a fully configured, Dracula-themed H
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/fursman/Ubuntu.git
-cd Ubuntu
+git clone https://github.com/fursman/ubuntu.git
+cd ubuntu
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -139,8 +139,16 @@ Press **Super + Space** to see all keybinds in a searchable Rofi menu.
 │   └── gtk-4.0/settings.ini    # GTK4 theme
 └── scripts/
     ├── lock-screen             # Blur-lock script
-    └── hypr-cheatsheet         # Keybind cheatsheet
+    ├── hypr-cheatsheet         # Keybind cheatsheet
+    ├── open-network-settings   # Waybar network launcher
+    └── open-bluetooth-settings # Waybar bluetooth launcher
 ```
+
+Waybar quick actions
+- Click network icon: open network settings
+- Right-click network icon: open nm-connection-editor
+- Click bluetooth icon: open bluetooth settings
+- Right-click bluetooth icon: toggle bluetooth rfkill
 
 ## ⚠️ Notes
 

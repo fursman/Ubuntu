@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v nm-connection-editor >/dev/null 2>&1; then
+  exec nm-connection-editor
+elif command -v gnome-control-center >/dev/null 2>&1; then
+  exec gnome-control-center wifi
+elif command -v nmtui >/dev/null 2>&1; then
+  exec kitty -e nmtui
+else
+  echo "No network settings app found" >&2
+  exit 1
+fi
