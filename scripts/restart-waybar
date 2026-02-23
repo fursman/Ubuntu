@@ -1,0 +1,24 @@
+#!/bin/bash
+# Gracefully restart waybar with correct Hyprland environment
+
+HYPR_PID=$(pgrep -x Hyprland)
+if [ -z "$HYPR_PID" ]; then
+    echo "Hyprland not running"
+    exit 1
+fi
+
+SRC_PID=$(pgrep -x waybar || echo "$HYPR_PID")
+SRC_PID=$(echo "$SRC_PID" | head -1)
+export $(cat /proc/$SRC_PID/environ 2>/dev/null | tr '\0' '\n' | grep -E "^(WAYLAND_DISPLAY|XDG_RUNTIME_DIR|HYPRLAND_INSTANCE_SIGNATURE|DISPLAY|MOZ_ENABLE_WAYLAND|QT_WAYLAND_DISABLE_WINDOWDECORATION)=")
+
+LATEST_SIG=$(ls -t /run/user/1000/hypr/ 2>/dev/null | head -1)
+if [ -n "$LATEST_SIG" ]; then
+    export HYPRLAND_INSTANCE_SIGNATURE="$LATEST_SIG"
+fi
+
+pkill -TERM waybar 2>/dev/null
+sleep 0.5
+pkill -9 waybar 2>/dev/null
+sleep 0.3
+nohup waybar &>/dev/null &
+echo "Waybar restarted (pid $!)"

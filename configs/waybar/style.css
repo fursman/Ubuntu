@@ -14,9 +14,7 @@ window#waybar {
     transition-duration: .5s;
 }
 
-window#waybar.hidden {
-    opacity: 0.2;
-}
+window#waybar.hidden { opacity: 0.2; }
 
 @keyframes blink-warning {
     70% { color: white; }
@@ -28,11 +26,7 @@ window#waybar.hidden {
     to { color: white; background-color: red; }
 }
 
-#taskbar {
-    padding: 0px 5px 0px 5px;
-    font-weight: normal;
-    font-style: normal;
-}
+#taskbar { padding: 0px 5px 0px 5px; font-weight: normal; font-style: normal; }
 
 #workspaces button {
     padding-left: 15px;
@@ -46,37 +40,22 @@ window#waybar.hidden {
     border-bottom: 3px solid transparent;
 }
 
-#workspaces button.visible {
-    background: #000000;
-    color: #FFFFFF;
-}
-
+#workspaces button.visible { background: #000000; color: #FFFFFF; }
 #workspaces button:hover {
     color: #FFFFFF;
     background: rgba(0, 0, 0, 0.2);
-    box-shadow: inherit;
-    text-shadow: inherit;
     border-bottom: 3px solid #a678d3;
 }
-
 #workspaces button.focused {
     background: #FFFFFF;
     border-top: 3px solid #9730fd;
     border-bottom: 3px solid #9730fd;
     color: #9730fd;
 }
+#workspaces button.current_output.focused { color: #FFFFFF; background: #000000; }
+#workspaces button.urgent { background-color: #FF0000; color: #000000; }
 
-#workspaces button.current_output.focused {
-    color: #FFFFFF;
-    background: #000000;
-}
-
-#workspaces button.urgent {
-    background-color: #FF0000;
-    color: #000000;
-}
-
-/* Base style for all right modules */
+/* Module colors */
 #network, #bluetooth, #disk, #memory, #cpu, #temperature, #pulseaudio, #backlight, #battery, #clock, #date, #window, #tray, #custom-media, #custom-notification {
     color: #FFFFFF;
     font-size: 20px;
@@ -89,87 +68,43 @@ window#waybar.hidden {
     border-bottom: 3px solid transparent;
 }
 
-/* Tinted off-white text — contrasting neighbors for readability */
-#network     { color: #ffffff; }
-#bluetooth   { color: #c4f0fa; }
-#disk        { color: #fae0c4; }
-#memory      { color: #c4fad4; }
-#cpu         { color: #d0c4fa; }
-#temperature { color: #fac4c4; }
-#pulseaudio  { color: #c4f0fa; }
-#backlight   { color: #faf0c4; }
-#battery     { color: #c4fad4; }
-#clock       { color: #ffffff; }
+#network     { color: #ffffff; }  /* white */
+#bluetooth   { color: #c4f0fa; }  /* cyan */
+#disk        { color: #fae0c4; }  /* orange */
+#memory      { color: #c4fad4; }  /* green */
+#cpu         { color: #d0c4fa; }  /* lavender */
+#temperature { color: #fac4c4; }  /* red-white */
+#pulseaudio  { color: #c4f0fa; }  /* cyan */
+#backlight   { color: #faf0c4; }  /* yellow */
+#battery     { color: #c4fad4; }  /* green */
+#clock       { color: #ffffff; }  /* white */
+#window      { color: #FFFFFF; min-width: 100px; }
+#clock       { font-weight: bold; }
 
-#window {
-    color: #FFFFFF;
-    min-width: 100px;
-}
-
-#battery {
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-    animation-direction: alternate;
-}
-
+/* Animations for battery/memory warnings */
 #battery.warning { color: orange; }
 #battery.critical { color: red; }
-#battery.warning.discharging {
-    animation-name: blink-warning;
-    animation-duration: 3s;
-}
-#battery.critical.discharging {
-    animation-name: blink-critical;
-    animation-duration: 2s;
-}
-
-#tray > .passive,
-#tray > .active,
-#tray > .needs-attention {
-    margin: 0 4px;
-}
-
-#clock { font-weight: bold; }
+#battery.warning.discharging { animation-name: blink-warning; animation-duration: 3s; }
+#battery.critical.discharging { animation-name: blink-critical; animation-duration: 2s; }
 #cpu.warning { color: orange; }
 #cpu.critical { color: red; }
-
-#memory {
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-    animation-direction: alternate;
-}
 #memory.warning { color: orange; }
-#memory.critical {
-    color: red;
-    animation-name: blink-critical;
-    animation-duration: 2s;
-}
+#memory.critical { color: red; animation-name: blink-critical; animation-duration: 2s; }
 
-/* ── Media player ── */
-#custom-media {
-    color: #bd93f9;
-    padding: 0 8px;
-}
+/* Voice assistant */
+#custom-voice { padding: 0 14px 0 16px; font-size: 14px; }
+#custom-voice.off { color: #bd93f9; }
+#custom-voice.ready { animation: pulse 600ms linear infinite alternate; color: #ffffff; }
+#custom-voice.listening { animation: pulse-listen 600ms linear infinite alternate; color: #33ccff; }
+#custom-voice.thinking { animation: pulse-think 800ms linear infinite alternate; color: #0000ff; }
+#custom-voice.speaking { animation: pulse-speak 500ms linear infinite alternate; color: #ff5555; }
 
-#custom-media.Playing {
-    color: #50fa7b;
-}
+/* Media player */
+#custom-media { color: #bd93f9; padding: 0 8px; }
+#custom-media.Playing { color: #50fa7b; }
+#custom-media.Paused { color: #6272a4; }
 
-#custom-media.Paused {
-    color: #6272a4;
-}
-
-/* ── Notification center ── */
-#custom-notification {
-    padding: 0 16px 0 8px;
-    color: #f8f8f2;
-}
-
-#custom-notification.notification {
-    animation: bell-flash 1s ease-in-out infinite alternate;
-}
-
-@keyframes bell-flash {
-    from { color: #f8f8f2; }
-    to { color: #f1fa8c; }
-}
+/* Notification center */
+#custom-notification { padding: 0 16px 0 8px; color: #f8f8f2; }
+#custom-notification.notification { animation: bell-flash 1s ease-in-out infinite alternate; }
+@keyframes bell-flash { from { color: #f8f8f2; } to { color: #f1fa8c; } }

@@ -2,7 +2,7 @@
     "layer": "top",
     "position": "top",
     "height": 30,
-    "modules-left": ["hyprland/workspaces", "wlr/taskbar"],
+    "modules-left": ["custom/voice", "hyprland/workspaces", "wlr/taskbar"],
     "modules-center": ["hyprland/window"],
     "modules-right": ["tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "clock#date", "clock#time", "custom/media", "custom/notification"],
 
@@ -36,6 +36,14 @@
         "escape": true
     },
 
+    "custom/voice": {
+        "exec": "cat ~/.local/state/voice-assistant/waybar-status 2>/dev/null || echo '{\"text\": \"\", \"class\": \"off\"}'",
+        "return-type": "json",
+        "interval": 1,
+        "format": "{}",
+        "tooltip": false
+    },
+
     "hyprland/workspaces": {
         "on-click": "activate",
         "format": "{icon}",
@@ -52,7 +60,7 @@
             "10": "⚑ "
         },
         "persistent-workspaces": {
-            "eDP-1": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+            "*": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         }
     },
 

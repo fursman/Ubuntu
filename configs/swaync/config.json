@@ -6,12 +6,14 @@
   "control-center-margin-bottom": 10,
   "control-center-margin-right": 10,
   "control-center-width": 400,
-  "notification-window-width": 400,
+  "notification-window-width": 900,
+  "notification-window-height": -1,
   "notification-icon-size": 64,
   "notification-body-image-height": 100,
   "notification-body-image-width": 200,
-  "timeout": 10,
-  "timeout-low": 5,
+  "notification-body-max-lines": 0,
+  "timeout": 0,
+  "timeout-low": 0,
   "timeout-critical": 0,
   "fit-to-screen": true,
   "keyboard-shortcuts": true,
@@ -20,19 +22,9 @@
   "hide-on-clear": false,
   "hide-on-action": true,
   "script-fail-notify": true,
-  "widgets": [
-    "title",
-    "dnd",
-    "notifications"
-  ],
+  "widgets": ["title", "dnd", "notifications"],
   "widget-config": {
-    "title": {
-      "text": "Notifications",
-      "clear-all-button": true,
-      "button-text": "Clear All"
-    },
-    "dnd": {
-      "text": "Do Not Disturb"
-    }
+    "title": { "text": "Notifications", "clear-all-button": true, "button-text": "Clear All" },
+    "dnd": { "text": "Do Not Disturb" }
   }
 }
