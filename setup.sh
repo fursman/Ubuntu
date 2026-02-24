@@ -30,6 +30,8 @@ echo ""
 
 # -- Step 1: APT packages --
 step "1/10 - Installing APT packages"
+info "Adding Hyprland PPA for latest version..."
+sudo add-apt-repository -y ppa:cppiber/hyprland
 sudo apt update
 sudo apt install -y \
     hyprland waybar kitty rofi mako-notifier swaylock swayosd gtklock \
@@ -54,6 +56,12 @@ if lspci | grep -qi 'nvidia'; then
         info "NVIDIA GPU detected, installing driver..."
         sudo apt install -y nvidia-driver-590-open linux-modules-nvidia-590-open-generic-hwe-24.04 || \
             warn "NVIDIA driver install failed -- you may need to reboot and retry"
+    fi
+    # Enable DRM modeset and fbdev for Wayland
+    if [ ! -f /etc/modprobe.d/nvidia-drm.conf ] || ! grep -q 'modeset=1' /etc/modprobe.d/nvidia-drm.conf; then
+        echo 'options nvidia-drm modeset=1 fbdev=1' | sudo tee /etc/modprobe.d/nvidia-drm.conf
+        sudo update-initramfs -u
+        info "nvidia-drm modeset=1 fbdev=1 configured"
     fi
 else
     info "No NVIDIA GPU detected, skipping driver install"
@@ -154,14 +162,7 @@ if lspci | grep -qi 'nvidia'; then
 env = GBM_BACKEND,nvidia-drm
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
 env = LIBVA_DRIVER_NAME,nvidia
-env = WLR_NO_HARDWARE_CURSORS,1
 ENVEOF
-    # Multi-GPU: detect all DRM card nodes and list them
-    CARDS=$(ls /dev/dri/card* 2>/dev/null | sort | tr '\n' ':' | sed 's/:$//')
-    if [ -n "$CARDS" ] && [ "$(echo "$CARDS" | tr ':' '\n' | wc -l)" -gt 1 ]; then
-        echo "env = WLR_DRM_DEVICES,$CARDS" >> "$ENV_LOCAL"
-        info "Multi-GPU detected: WLR_DRM_DEVICES=$CARDS"
-    fi
     success "NVIDIA env vars written to env-local.conf"
 else
     info "No NVIDIA GPU -- env-local.conf left empty"
@@ -178,6 +179,37 @@ for script in "$SCRIPT_DIR"/scripts/*; do
     chmod +x "$HOME/.local/bin/$name"
     info "-> ~/.local/bin/$name"
 done
+
+# Generate NVIDIA Hyprland wrapper (sets AQ_DRM_DEVICES by PCI address)
+if lspci | grep -qi 'nvidia'; then
+    cat > "$HOME/.local/bin/hyprland-nvidia" << 'WRAPEOF'
+#!/bin/bash
+export GBM_BACKEND=nvidia-drm
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export LIBVA_DRIVER_NAME=nvidia
+
+# Auto-detect primary NVIDIA GPU for Aquamarine
+# Uses the first NVIDIA card found; override AQ_DRM_DEVICES if needed
+for card_dir in /sys/class/drm/card[0-9]; do
+    if [ -d "$card_dir/device" ]; then
+        driver=$(basename "$(readlink -f "$card_dir/device/driver")" 2>/dev/null)
+        if [ "$driver" = "nvidia" ] && [ -z "$AQ_DRM_DEVICES" ]; then
+            export AQ_DRM_DEVICES=/dev/dri/$(basename "$card_dir")
+        fi
+    fi
+done
+
+exec Hyprland "$@"
+WRAPEOF
+    chmod +x "$HOME/.local/bin/hyprland-nvidia"
+    success "NVIDIA Hyprland wrapper installed"
+
+    # Update desktop entry to use wrapper
+    if [ -f /usr/share/wayland-sessions/hyprland.desktop ]; then
+        sudo sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/hyprland-nvidia|" /usr/share/wayland-sessions/hyprland.desktop
+        success "Desktop entry updated to use NVIDIA wrapper"
+    fi
+fi
 
 # Ensure ~/.local/bin is in PATH
 if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
