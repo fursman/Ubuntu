@@ -44,7 +44,8 @@ sudo apt install -y \
     gnome-keyring seahorse network-manager-gnome blueman \
     papirus-icon-theme fonts-jetbrains-mono \
     espeak portaudio19-dev libportaudio2 python3-dev python3-venv \
-    git curl wget flatpak hyprpaper
+    git curl wget flatpak \
+    cargo libwayland-dev wayland-protocols pkg-config liblz4-dev
 success "APT packages installed"
 
 # -- Step 2: NVIDIA driver (auto-detect) --
@@ -118,7 +119,6 @@ success "Dracula icon theme ready"
 step "7/10 - Deploying configuration files"
 declare -A CONFIG_MAP=(
     ["configs/hypr/hyprland.conf"]="$HOME/.config/hypr/hyprland.conf"
-    ["configs/hypr/hyprpaper.conf"]="$HOME/.config/hypr/hyprpaper.conf"
     ["configs/waybar/config.jsonc"]="$HOME/.config/waybar/config.jsonc"
     ["configs/waybar/style.css"]="$HOME/.config/waybar/style.css"
     ["configs/kitty/kitty.conf"]="$HOME/.config/kitty/kitty.conf"
@@ -194,8 +194,28 @@ info "→ $ENV_LOCAL (DRM devices: $DRM_CARDS)"
 
 success "Config files deployed"
 
-# -- Step 8: Helper scripts --
-step "8/10 - Installing helper scripts"
+# -- Step 8: Build & install awww (animated wallpaper daemon) --
+step "8/11 - Building awww (animated wallpaper daemon)"
+AWWW_DIR="/tmp/awww-build"
+if command -v awww &>/dev/null; then
+    warn "awww already installed, skipping build"
+else
+    git clone --depth=1 https://codeberg.org/LGFae/awww.git "$AWWW_DIR"
+    if [ -f "$AWWW_DIR/Cargo.toml" ]; then
+        (cd "$AWWW_DIR" && cargo build --release)
+        cp "$AWWW_DIR/target/release/awww" "$HOME/.local/bin/"
+        cp "$AWWW_DIR/target/release/awww-daemon" "$HOME/.local/bin/"
+        chmod +x "$HOME/.local/bin/awww" "$HOME/.local/bin/awww-daemon"
+        rm -rf "$AWWW_DIR"
+    else
+        warn "awww clone failed — install manually from https://codeberg.org/LGFae/awww"
+    fi
+fi
+mkdir -p "$HOME/.cache/awww"
+success "awww ready"
+
+# -- Step 9: Helper scripts --
+step "9/11 - Installing helper scripts"
 mkdir -p "$HOME/.local/bin"
 for script in "$SCRIPT_DIR"/scripts/*; do
     name="$(basename "$script")"
@@ -242,16 +262,29 @@ if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
 fi
 success "Helper scripts installed"
 
-# -- Step 9: GTK theme settings --
-step "9/10 - Setting GTK theme"
+# Basic launcher sanity checks
+if command -v open-network-settings &>/dev/null; then
+    success "Network launcher installed"
+else
+    warn "Network launcher not found in PATH yet (new shell may be needed)"
+fi
+
+if command -v open-bluetooth-settings &>/dev/null; then
+    success "Bluetooth launcher installed"
+else
+    warn "Bluetooth launcher not found in PATH yet (new shell may be needed)"
+fi
+
+# -- Step 10: GTK theme settings --
+step "10/11 - Setting GTK theme"
 gsettings set org.gnome.desktop.interface gtk-theme 'Dracula' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface icon-theme 'Dracula' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface cursor-size 48 2>/dev/null || true
 success "GTK theme configured"
 
-# -- Step 10: Flatpak apps --
-step "10/10 - Installing Flatpak apps"
+# -- Step 11: Flatpak apps --
+step "11/11 - Installing Flatpak apps"
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 flatpak install -y flathub org.gnome.World.PikaBackup 2>/dev/null || warn "Pika Backup install failed (try manually)"
 success "Flatpak apps installed"
@@ -261,6 +294,7 @@ step "Bonus - Desktop assets from github.com/fursman/desktop-assets"
 
 ASSETS_DIR="/tmp/desktop-assets-setup"
 ASSETS_URL="https://github.com/fursman/Desktop-Assets.git"
+mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.cache/awww"
 
 if [ ! -d "$ASSETS_DIR" ]; then
     git clone --depth 1 "$ASSETS_URL" "$ASSETS_DIR"

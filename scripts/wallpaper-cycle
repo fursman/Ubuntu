@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Cycle wallpapers with awww transitions
+# Usage: wallpaper-cycle next|prev
+
+export PATH="$HOME/.local/bin:$PATH"
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export WAYLAND_DISPLAY=wayland-1
+
+WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+STATE_FILE="$HOME/.cache/awww/current-index"
+
+# Build sorted list of all images (recursive, skip current.jpg)
+mapfile -t images < <(find "$WALLPAPER_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' \) ! -name 'current.jpg' | sort)
+
+[[ ${#images[@]} -eq 0 ]] && exit 1
+
+# Read current index
+index=0
+[[ -f "$STATE_FILE" ]] && index=$(cat "$STATE_FILE")
+
+# Advance
+case "${1:-next}" in
+    next) index=$(( (index + 1) % ${#images[@]} )) ;;
+    prev) index=$(( (index - 1 + ${#images[@]}) % ${#images[@]} )) ;;
+esac
+
+# Save state
+echo "$index" > "$STATE_FILE"
+
+# Pick random transition
+transitions=(center outer left right top bottom simple any)
+rand_t=${transitions[$RANDOM % ${#transitions[@]}]}
+
+# Set wallpaper
+awww img --transition-type "$rand_t" --transition-step 2 --transition-fps 60 "${images[$index]}"
+
+# Notify
+basename=$(basename "${images[$index]}")
+dirname=$(basename $(dirname "${images[$index]}"))
+notify-send -t 2000 "Wallpaper" "$dirname/$basename ($rand_t)"
