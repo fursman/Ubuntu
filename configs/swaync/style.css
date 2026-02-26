@@ -52,6 +52,7 @@
     color: @fg;
     font-size: 12px;
     font-weight: normal;
+    padding-bottom: 8px;
 }
 
 .time {

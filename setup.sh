@@ -29,7 +29,7 @@ echo -e "${BOLD}  Stock Ubuntu -> Hyprland Desktop${NC}"
 echo ""
 
 # -- Step 1: APT packages --
-step "1/10 - Installing APT packages"
+step "1/12 - Installing APT packages"
 info "Adding Hyprland PPA for latest version..."
 sudo add-apt-repository -y ppa:cppiber/hyprland
 sudo apt update
@@ -37,7 +37,7 @@ sudo apt install -y \
     hyprland waybar kitty rofi mako-notifier swaylock swayosd gtklock \
     grim slurp wl-clipboard cliphist \
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-    sway-notification-center swayidle wf-recorder wlogout \
+    swayidle wf-recorder wlogout \
     thunar thunar-volman pavucontrol \
     brightnessctl playerctl pamixer \
     btop fastfetch mpv vlc imagemagick \
@@ -45,11 +45,14 @@ sudo apt install -y \
     papirus-icon-theme fonts-jetbrains-mono \
     espeak portaudio19-dev libportaudio2 python3-dev python3-venv \
     git curl wget flatpak \
-    cargo libwayland-dev wayland-protocols pkg-config liblz4-dev
+    cargo libwayland-dev wayland-protocols pkg-config liblz4-dev \
+    meson ninja-build valac sassc blueprint-compiler \
+    libgtk4-layer-shell-dev libadwaita-1-dev libgranite-7-dev \
+    libgee-0.8-dev libpulse-dev libjson-glib-dev scdoc
 success "APT packages installed"
 
 # -- Step 2: NVIDIA driver (auto-detect) --
-step "2/10 - NVIDIA driver"
+step "2/12 - NVIDIA driver"
 if lspci | grep -qi 'nvidia'; then
     if nvidia-smi &>/dev/null; then
         warn "NVIDIA driver already installed ($(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1))"
@@ -70,7 +73,7 @@ fi
 success "NVIDIA driver step complete"
 
 # -- Step 3: Node.js 22 --
-step "3/10 - Installing Node.js 22"
+step "3/12 - Installing Node.js 22"
 if command -v node &>/dev/null && node -v | grep -q "v22"; then
     warn "Node.js 22 already installed, skipping"
 else
@@ -80,7 +83,7 @@ fi
 success "Node.js $(node -v 2>/dev/null || echo 'pending') ready"
 
 # -- Step 4: JetBrainsMono Nerd Font --
-step "4/10 - Installing JetBrainsMono Nerd Font"
+step "4/12 - Installing JetBrainsMono Nerd Font"
 FONT_DIR="$HOME/.local/share/fonts"
 if ls "$FONT_DIR"/JetBrainsMonoNerd* &>/dev/null; then
     warn "JetBrainsMono Nerd Font already installed, skipping"
@@ -95,7 +98,7 @@ fi
 success "Nerd Font installed"
 
 # -- Step 5: Dracula GTK theme --
-step "5/10 - Installing Dracula GTK theme"
+step "5/12 - Installing Dracula GTK theme"
 if [ -d "$HOME/.themes/Dracula" ]; then
     warn "Dracula GTK theme already installed, skipping"
 else
@@ -104,7 +107,7 @@ fi
 success "Dracula GTK theme ready"
 
 # -- Step 6: Dracula icon theme --
-step "6/10 - Installing Dracula icon theme"
+step "6/12 - Installing Dracula icon theme"
 if [ -d "$HOME/.icons/Dracula" ]; then
     warn "Dracula icon theme already installed, skipping"
 else
@@ -116,7 +119,7 @@ fi
 success "Dracula icon theme ready"
 
 # -- Step 7: Deploy config files --
-step "7/10 - Deploying configuration files"
+step "7/12 - Deploying configuration files"
 declare -A CONFIG_MAP=(
     ["configs/hypr/hyprland.conf"]="$HOME/.config/hypr/hyprland.conf"
     ["configs/waybar/config.jsonc"]="$HOME/.config/waybar/config.jsonc"
@@ -195,7 +198,7 @@ info "→ $ENV_LOCAL (DRM devices: $DRM_CARDS)"
 success "Config files deployed"
 
 # -- Step 8: Build & install awww (animated wallpaper daemon) --
-step "8/11 - Building awww (animated wallpaper daemon)"
+step "8/12 - Building awww (animated wallpaper daemon)"
 AWWW_DIR="/tmp/awww-build"
 if command -v awww &>/dev/null; then
     warn "awww already installed, skipping build"
@@ -214,8 +217,29 @@ fi
 mkdir -p "$HOME/.cache/awww"
 success "awww ready"
 
-# -- Step 9: Helper scripts --
-step "9/11 - Installing helper scripts"
+# -- Step 9: Build swaync from source --
+step "9/12 - Building swaync 0.12.4 (notification daemon)"
+SWAYNC_VERSION="v0.12.4"
+SWAYNC_BUILD_DIR="/tmp/swaync-build"
+if swaync --version 2>/dev/null | grep -q "0.12.4"; then
+    warn "swaync 0.12.4 already installed, skipping build"
+else
+    info "Cloning swaync ${SWAYNC_VERSION}..."
+    rm -rf "$SWAYNC_BUILD_DIR"
+    git clone --branch "$SWAYNC_VERSION" --depth 1 \
+        https://github.com/ErikReider/SwayNotificationCenter.git "$SWAYNC_BUILD_DIR"
+    info "Configuring..."
+    meson setup "$SWAYNC_BUILD_DIR/build" "$SWAYNC_BUILD_DIR" --prefix=/usr
+    info "Compiling..."
+    ninja -C "$SWAYNC_BUILD_DIR/build"
+    info "Installing..."
+    sudo ninja -C "$SWAYNC_BUILD_DIR/build" install
+    rm -rf "$SWAYNC_BUILD_DIR"
+fi
+success "swaync $(swaync --version 2>/dev/null | head -1) ready"
+
+# -- Step 10: Helper scripts --
+step "10/12 - Installing helper scripts"
 mkdir -p "$HOME/.local/bin"
 for script in "$SCRIPT_DIR"/scripts/*; do
     name="$(basename "$script")"
@@ -275,16 +299,16 @@ else
     warn "Bluetooth launcher not found in PATH yet (new shell may be needed)"
 fi
 
-# -- Step 10: GTK theme settings --
-step "10/11 - Setting GTK theme"
+# -- Step 11: GTK theme settings --
+step "11/12 - Setting GTK theme"
 gsettings set org.gnome.desktop.interface gtk-theme 'Dracula' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface icon-theme 'Dracula' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface cursor-size 48 2>/dev/null || true
 success "GTK theme configured"
 
-# -- Step 11: Flatpak apps --
-step "11/11 - Installing Flatpak apps"
+# -- Step 12: Flatpak apps --
+step "12/12 - Installing Flatpak apps"
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 flatpak install -y flathub org.gnome.World.PikaBackup 2>/dev/null || warn "Pika Backup install failed (try manually)"
 success "Flatpak apps installed"
