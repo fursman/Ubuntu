@@ -45,7 +45,7 @@ sudo apt install -y \
     papirus-icon-theme fonts-jetbrains-mono \
     espeak portaudio19-dev libportaudio2 python3-dev python3-venv \
     git curl wget flatpak \
-    cargo libwayland-dev wayland-protocols pkg-config liblz4-dev \
+    libwayland-dev wayland-protocols pkg-config liblz4-dev \
     meson ninja-build valac sassc blueprint-compiler \
     libgtk4-layer-shell-dev libadwaita-1-dev libgranite-7-dev \
     libgee-0.8-dev libpulse-dev libjson-glib-dev scdoc
@@ -199,6 +199,20 @@ success "Config files deployed"
 
 # -- Step 8: Build & install awww (animated wallpaper daemon) --
 step "8/12 - Building awww (animated wallpaper daemon)"
+# Install Rust via rustup (distro packages are too old for awww)
+if command -v rustup &>/dev/null; then
+    warn "rustup already installed, updating toolchain..."
+    rustup update stable
+elif command -v "$HOME/.cargo/bin/rustup" &>/dev/null; then
+    warn "rustup found in ~/.cargo/bin, updating toolchain..."
+    "$HOME/.cargo/bin/rustup" update stable
+else
+    info "Installing Rust via rustup..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+fi
+export PATH="$HOME/.cargo/bin:$PATH"
+info "Using rustc $(rustc --version)"
+
 AWWW_DIR="/tmp/awww-build"
 if command -v awww &>/dev/null; then
     warn "awww already installed, skipping build"
