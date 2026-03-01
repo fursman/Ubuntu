@@ -92,12 +92,29 @@ window#waybar.hidden { opacity: 0.2; }
 #memory.critical { color: red; animation-name: blink-critical; animation-duration: 2s; }
 
 /* Voice assistant */
-#custom-voice { padding: 0 14px 0 16px; font-size: 14px; }
-#custom-voice.off { color: #bd93f9; }
-#custom-voice.ready { animation: pulse 600ms linear infinite alternate; color: #ffffff; }
-#custom-voice.listening { animation: pulse-listen 600ms linear infinite alternate; color: #33ccff; }
-#custom-voice.thinking { animation: pulse-think 800ms linear infinite alternate; color: #0000ff; }
-#custom-voice.speaking { animation: pulse-speak 500ms linear infinite alternate; color: #ff5555; }
+#custom-voice { padding: 0 14px 0 16px; font-size: 18px; }
+#custom-voice.off { color: #6272a4; }
+#custom-voice.ready { animation: pulse 1.5s ease-in-out infinite alternate; color: #50fa7b; }
+#custom-voice.listening { animation: pulse-listen 600ms ease-in-out infinite alternate; color: #33ccff; }
+#custom-voice.thinking { animation: pulse-think 800ms ease-in-out infinite alternate; color: #bd93f9; }
+#custom-voice.speaking { animation: pulse-speak 400ms ease-in-out infinite alternate; color: #ff5555; }
+
+@keyframes pulse {
+    from { opacity: 0.6; }
+    to { opacity: 1.0; }
+}
+@keyframes pulse-listen {
+    from { opacity: 0.4; text-shadow: 0 0 4px #33ccff; }
+    to { opacity: 1.0; text-shadow: 0 0 12px #33ccff; }
+}
+@keyframes pulse-think {
+    from { opacity: 0.5; text-shadow: 0 0 4px #bd93f9; }
+    to { opacity: 1.0; text-shadow: 0 0 10px #bd93f9; }
+}
+@keyframes pulse-speak {
+    from { opacity: 0.5; text-shadow: 0 0 4px #ff5555; }
+    to { opacity: 1.0; text-shadow: 0 0 14px #ff5555; }
+}
 
 /* Media player */
 #custom-media { color: #bd93f9; padding: 0 8px; }

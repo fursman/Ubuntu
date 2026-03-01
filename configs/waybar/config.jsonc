@@ -41,7 +41,10 @@
         "return-type": "json",
         "interval": 1,
         "format": "{}",
-        "tooltip": false
+        "tooltip": true,
+        "tooltip-format": "Voice Assistant (click: toggle, right-click: new session)",
+        "on-click": "kill -USR1 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)",
+        "on-click-right": "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)"
     },
 
     "hyprland/workspaces": {
