@@ -51,6 +51,14 @@ sudo apt install -y \
     libgee-0.8-dev libpulse-dev libjson-glib-dev scdoc
 success "APT packages installed"
 
+# Backlight control requires video group membership
+if ! id -nG | grep -qw video; then
+    sudo usermod -aG video "$USER"
+    info "Added $USER to video group (needed for brightnessctl / swayosd)"
+else
+    info "$USER already in video group"
+fi
+
 # -- Step 2: NVIDIA driver (auto-detect) --
 step "2/12 - NVIDIA driver"
 if lspci | grep -qi 'nvidia'; then
