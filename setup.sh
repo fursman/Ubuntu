@@ -32,8 +32,11 @@ echo ""
 step "1/12 - Installing APT packages"
 info "Adding Hyprland PPA for latest version..."
 sudo add-apt-repository -y ppa:cppiber/hyprland
+# Fix any partially configured packages from prior interrupted installs
+sudo dpkg --configure -a 2>/dev/null || true
 sudo apt update
 sudo apt install -y \
+    build-essential \
     hyprland waybar kitty rofi mako-notifier swaylock swayosd gtklock \
     grim slurp wl-clipboard cliphist \
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
