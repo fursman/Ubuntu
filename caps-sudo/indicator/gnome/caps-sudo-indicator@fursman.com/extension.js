@@ -29,7 +29,7 @@ class CapsSudoIndicator extends PanelMenu.Button {
             y_align: Clutter.ActorAlign.CENTER,
         });
         pill.add_child(new St.Icon({
-            icon_name: 'channel-insecure-symbolic',
+            icon_name: 'dialog-warning-symbolic',
             style_class: 'caps-sudo-icon',
             y_align: Clutter.ActorAlign.CENTER,
         }));

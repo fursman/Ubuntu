@@ -120,17 +120,32 @@ POLKIT_POLICY=/usr/share/polkit-1/actions/com.fursman.caps-sudo.policy
 
 # Native OS authentication dialog.
 #
-# We must drop out of root before calling pkexec. keyd runs this helper as root,
-# and polkit authorises a root caller unconditionally -- calling pkexec directly
-# from here would arm the machine with no prompt at all. Dropping to
-# $TARGET_USER first is what makes polkit demand the password.
+# Two separate traps here, both of which silently break authentication:
+#
+# 1. We must drop out of root before calling pkexec. keyd runs this helper as
+#    root, and polkit authorises a root caller unconditionally -- calling
+#    pkexec straight from here would arm the machine with NO prompt at all.
+#
+# 2. Dropping to $TARGET_USER is still not enough. polkit finds the
+#    authentication agent via the caller's *logind session*, and keyd is a
+#    system daemon with no session -- so `sudo -u "$TARGET_USER" pkexec` exits
+#    instantly and no dialog is ever drawn. Testing this by hand from a
+#    terminal hides the bug, because a shell inherits your login session.
+#
+# So we hand the job to the user's systemd manager with `systemd-run --user`.
+# The transient unit runs inside user@.service, which does have a session, and
+# polkit then raises the dialog correctly.
 #
 # The action is auth_admin (never auth_admin_keep), so every arm needs a fresh
-# password; polkit never caches this one.
+# password; polkit never caches this one. The fixed --unit name means a second
+# tap while a prompt is already pending is a no-op instead of stacking dialogs.
 polkit_auth(){
+  local rt; rt=$(user_runtime)
   # shellcheck disable=SC2046
   setsid sudo -u "$TARGET_USER" env $(user_env) \
-    pkexec "$HELPER" arm-commit >/dev/null 2>&1 &
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
+    systemd-run --user --quiet --collect --unit=caps-sudo-auth \
+      pkexec "$HELPER" arm-commit 2>&1 | logger -t "$TAG" &
 }
 
 # Fallback for sessions with no polkit agent (bare WMs): pop a terminal and let
