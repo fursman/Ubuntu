@@ -1,0 +1,39 @@
+/* ==========================================================================
+ * Dracula — single source of truth for every GTK-CSS surface on this desktop
+ * (waybar, swaync, wlogout, gtklock).
+ *
+ * Deployed by setup.sh next to each consumer's stylesheet, which pulls it in
+ * with `@import "palette.css";`. GTK CSS cannot expand ~, so a copy lives
+ * beside each stylesheet rather than in one shared location.
+ *
+ * Palette: https://draculatheme.com/contribute  — do not invent new hues here.
+ * If a component needs a colour, it gets one of these or a documented alpha
+ * variant of one.
+ * ========================================================================== */
+
+/* -- Core ---------------------------------------------------------------- */
+@define-color bg          #282a36;  /* Background   */
+@define-color bg-alt      #21222c;  /* one step down, for recessed surfaces */
+@define-color current     #44475a;  /* Current Line / Selection */
+@define-color fg          #f8f8f2;  /* Foreground   */
+@define-color comment     #6272a4;  /* Comment — the muted/disabled tone */
+
+/* -- Accents ------------------------------------------------------------- */
+@define-color cyan        #8be9fd;
+@define-color green       #50fa7b;
+@define-color orange      #ffb86c;
+@define-color pink        #ff79c6;
+@define-color purple      #bd93f9;
+@define-color red         #ff5555;
+@define-color yellow      #f1fa8c;
+
+/* -- Derived surfaces ----------------------------------------------------- *
+ * Bars and popovers sit over the wallpaper, so they are translucent rather
+ * than solid @bg. Kept here so every surface uses the SAME translucency
+ * instead of each stylesheet picking its own alpha.
+ * ------------------------------------------------------------------------ */
+@define-color surface        rgba(40, 42, 54, 0.82);  /* @bg      @ 82% */
+@define-color surface-solid  rgba(40, 42, 54, 0.97);  /* popovers, menus */
+@define-color surface-hover  rgba(68, 71, 90, 0.55);  /* @current @ 55% */
+@define-color border-soft    rgba(98, 114, 164, 0.28); /* @comment @ 28% */
+@define-color shadow-soft    rgba(0, 0, 0, 0.45);

@@ -1,18 +1,22 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # ============================================================================
-# Stock Ubuntu -> Hyprland Setup Script
-# Transforms stock Ubuntu 25.10 into a fully configured Hyprland desktop
+# Stock Ubuntu -> Hyprland Desktop
+#
+# Target: Ubuntu 26.04 LTS (resolute). Works on any release the Hyprland PPA
+# publishes for; the codename is resolved at runtime, never hardcoded.
+#
+#   ./setup.sh                 full run
+#   ./setup.sh --configs-only  redeploy dotfiles + theme, install nothing
+#   ./setup.sh --no-nvidia     skip the GPU driver step
+#
+# Hardware-specific VFIO/Looking-Glass/Windows-VM setup lives in a separate
+# script: ./gpu-passthrough.sh
 # ============================================================================
 
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+BOLD='\033[1m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'
+YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -22,115 +26,209 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error()   { echo -e "${RED}[FAIL]${NC} $1"; }
 step()    { echo -e "\n${CYAN}${BOLD}-- $1 --${NC}"; }
 
+CONFIGS_ONLY=0
+SKIP_NVIDIA=0
+for arg in "$@"; do
+    case "$arg" in
+        --configs-only) CONFIGS_ONLY=1 ;;
+        --no-nvidia)    SKIP_NVIDIA=1 ;;
+        -h|--help) sed -n '3,16p' "$0"; exit 0 ;;
+        *) error "Unknown option: $arg"; exit 1 ;;
+    esac
+done
+
+CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+RELEASE="$(. /etc/os-release && echo "$VERSION_ID")"
+
 echo -e "${BOLD}${CYAN}"
 echo "  H Y P R L A N D"
 echo -e "${NC}"
 echo -e "${BOLD}  Stock Ubuntu -> Hyprland Desktop${NC}"
-echo ""
+echo -e "  Detected: Ubuntu $RELEASE ($CODENAME)\n"
 
-# -- Step 1: APT packages --
-step "1/12 - Installing APT packages"
-info "Adding Hyprland PPA for latest version..."
-sudo add-apt-repository -y ppa:cppiber/hyprland
-# Fix any partially configured packages from prior interrupted installs
-sudo dpkg --configure -a 2>/dev/null || true
-sudo apt update
-sudo apt install -y \
-    build-essential \
-    hyprland waybar kitty rofi mako-notifier swaylock swayosd gtklock \
-    grim slurp wl-clipboard cliphist \
-    xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-    swayidle wf-recorder wlogout \
-    thunar thunar-volman pavucontrol \
-    brightnessctl playerctl pamixer \
-    btop fastfetch mpv vlc imagemagick \
-    gnome-keyring seahorse network-manager-gnome blueman \
-    papirus-icon-theme fonts-jetbrains-mono \
-    espeak portaudio19-dev libportaudio2 python3-dev python3-venv \
-    git curl wget flatpak \
-    libwayland-dev wayland-protocols pkg-config liblz4-dev \
-    meson ninja-build valac sassc blueprint-compiler \
-    libgtk4-layer-shell-dev libadwaita-1-dev libgranite-7-dev \
-    libgee-0.8-dev libpulse-dev libjson-glib-dev scdoc
-success "APT packages installed"
+# apt-get, not apt: stable CLI, no "unstable interface" warnings in scripts.
+APT_GET=(sudo DEBIAN_FRONTEND=noninteractive apt-get -y
+         -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
 
-# Backlight control requires video group membership
-if ! id -nG | grep -qw video; then
-    sudo usermod -aG video "$USER"
-    info "Added $USER to video group (needed for brightnessctl / swayosd)"
-else
-    info "$USER already in video group"
-fi
-
-# -- Step 2: NVIDIA driver (auto-detect) --
-step "2/12 - NVIDIA driver"
-if lspci | grep -qi 'nvidia'; then
-    if nvidia-smi &>/dev/null; then
-        warn "NVIDIA driver already installed ($(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1))"
+# Install only what is missing, so re-runs are fast and quiet.
+apt_need() {
+    local missing=()
+    for p in "$@"; do
+        dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q '^install ok installed$' \
+            || missing+=("$p")
+    done
+    if [ ${#missing[@]} -eq 0 ]; then
+        info "already installed: $*"
     else
-        info "NVIDIA GPU detected, installing driver..."
-        sudo apt install -y nvidia-driver-590-open linux-modules-nvidia-590-open-generic-hwe-24.04 || \
-            warn "NVIDIA driver install failed -- you may need to reboot and retry"
+        info "installing: ${missing[*]}"
+        "${APT_GET[@]}" install "${missing[@]}"
     fi
-    # Enable DRM modeset and fbdev for Wayland
-    if [ ! -f /etc/modprobe.d/nvidia-drm.conf ] || ! grep -q 'modeset=1' /etc/modprobe.d/nvidia-drm.conf; then
-        echo 'options nvidia-drm modeset=1 fbdev=1' | sudo tee /etc/modprobe.d/nvidia-drm.conf
-        sudo update-initramfs -u
-        info "nvidia-drm modeset=1 fbdev=1 configured"
-    fi
-else
-    info "No NVIDIA GPU detected, skipping driver install"
-fi
-success "NVIDIA driver step complete"
+}
 
-# -- Step 3: Node.js 22 --
-step "3/12 - Installing Node.js 22"
-if command -v node &>/dev/null && node -v | grep -q "v22"; then
-    warn "Node.js 22 already installed, skipping"
+if [ "$CONFIGS_ONLY" = 1 ]; then
+    warn "--configs-only: skipping every install step"
+fi
+
+# ---------------------------------------------------------------------------
+if [ "$CONFIGS_ONLY" = 0 ]; then
+step "1/10 - Repositories"
+# ---------------------------------------------------------------------------
+# The archive carries Hyprland, but a release or two behind. The PPA tracks
+# upstream, which matters because the config in this repo uses syntax
+# (windowrule v2 `match:`, the `gesture =` form) that older builds reject.
+if [ -f "/etc/apt/sources.list.d/cppiber-ubuntu-hyprland-$CODENAME.sources" ]; then
+    info "Hyprland PPA already configured for $CODENAME"
+elif sudo add-apt-repository -y ppa:cppiber/hyprland 2>/dev/null; then
+    success "Hyprland PPA added for $CODENAME"
+else
+    warn "Hyprland PPA has no $CODENAME series — falling back to the archive"
+    warn "If Hyprland is older than 0.55, some window rules in hyprland.conf will warn"
+fi
+
+sudo dpkg --configure -a 2>/dev/null || true
+sudo apt-get update
+
+step "2/10 - Packages"
+# -- Compositor and its immediate surroundings --
+apt_need hyprland waybar kitty rofi wlogout gtklock \
+         xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
+         sway-notification-center swayosd swayidle \
+         grim slurp swappy wl-clipboard cliphist wtype wf-recorder
+
+# -- polkit agent --
+# Without one, anything that needs authentication (mounting a disk in Thunar,
+# GParted, virt-manager) fails silently with no prompt. Stock GNOME ships an
+# agent; a bare Hyprland session does not.
+if apt-cache show hyprpolkitagent >/dev/null 2>&1; then
+    apt_need hyprpolkitagent
+    POLKIT_AGENT="/usr/libexec/hyprpolkitagent"
+else
+    apt_need polkitd-pkla lxpolkit || true
+    POLKIT_AGENT="/usr/bin/lxpolkit"
+fi
+
+# -- Desktop services and apps --
+apt_need thunar thunar-volman tumbler pavucontrol \
+         brightnessctl playerctl pamixer \
+         gnome-keyring seahorse network-manager-gnome blueman \
+         btop fastfetch mpv imagemagick ffmpeg \
+         papirus-icon-theme fonts-jetbrains-mono fonts-font-awesome \
+         git git-lfs gh curl wget flatpak timeshift
+
+# -- Toolchain (also covers building awww) --
+apt_need build-essential pkg-config meson ninja-build cmake \
+         python3-dev python3-venv python3-pip \
+         libwayland-dev wayland-protocols liblz4-dev scdoc
+
+success "Packages installed"
+
+# Backlight control via brightnessctl/swayosd needs video group membership.
+if id -nG "$USER" | grep -qw video; then
+    info "$USER already in video group"
+else
+    sudo usermod -aG video "$USER"
+    info "Added $USER to video group (re-login required for backlight keys)"
+fi
+
+step "3/10 - Razer hardware support"
+# This repo's reference machine is a Razer Blade. openrazer drives the
+# per-key RGB and fan control; harmless to skip elsewhere.
+if lsusb 2>/dev/null | grep -qi 'Razer' || sudo dmidecode -s system-manufacturer 2>/dev/null | grep -qi razer; then
+    apt_need openrazer-meta python3-openrazer
+    sudo usermod -aG plugdev "$USER" 2>/dev/null || true
+    success "OpenRazer installed"
+else
+    info "No Razer hardware detected, skipping"
+fi
+
+step "4/10 - NVIDIA driver"
+if [ "$SKIP_NVIDIA" = 1 ]; then
+    info "--no-nvidia given, skipping"
+elif ! lspci | grep -qi 'nvidia'; then
+    info "No NVIDIA GPU detected, skipping"
+else
+    # Prefer the DISTRO-SIGNED prebuilt modules over DKMS. They survive
+    # Secure Boot, and they do not need rebuilding on every kernel bump —
+    # which is what silently breaks a DKMS setup after an unattended upgrade.
+    NV_VER=$(ubuntu-drivers devices 2>/dev/null \
+             | awk '/recommended/ {print $3}' | grep -oP 'nvidia-driver-\K[0-9]+' | head -1)
+    if [ -z "$NV_VER" ]; then
+        NV_VER=$(apt-cache search --names-only '^nvidia-driver-[0-9]+-open$' \
+                 | grep -oP 'nvidia-driver-\K[0-9]+' | sort -n | tail -1)
+    fi
+
+    if [ -z "$NV_VER" ]; then
+        warn "Could not determine an NVIDIA driver version — install manually"
+    elif nvidia-smi &>/dev/null && [ "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | cut -d. -f1)" = "$NV_VER" ]; then
+        info "nvidia-driver-$NV_VER already active"
+    else
+        info "Installing nvidia-driver-$NV_VER-open (signed prebuilt modules)"
+        HWE=$(apt-cache search --names-only "^linux-modules-nvidia-$NV_VER-open-generic-hwe-" \
+              | awk '{print $1}' | sort -V | tail -1)
+        apt_need "nvidia-driver-$NV_VER-open" ${HWE:+"$HWE"}
+        # Pin them manual: if the metapackage is only ever pulled in as a
+        # dependency, a later `apt autoremove` will quietly rip the driver out.
+        sudo apt-mark manual "nvidia-driver-$NV_VER-open" ${HWE:+"$HWE"} >/dev/null
+        success "nvidia-driver-$NV_VER-open installed and pinned"
+    fi
+
+    # DRM modeset is mandatory for Wayland on NVIDIA; fbdev gives a working
+    # console and avoids a black screen between GRUB and the compositor.
+    if [ ! -f /etc/modprobe.d/nvidia-drm.conf ] || ! grep -q 'modeset=1' /etc/modprobe.d/nvidia-drm.conf; then
+        echo 'options nvidia-drm modeset=1 fbdev=1' | sudo tee /etc/modprobe.d/nvidia-drm.conf >/dev/null
+        sudo update-initramfs -u
+        success "nvidia-drm modeset=1 fbdev=1 configured"
+    else
+        info "nvidia-drm modeset already configured"
+    fi
+fi
+
+step "5/10 - Node.js 22"
+if command -v node &>/dev/null && node -v | grep -q '^v22'; then
+    info "Node.js $(node -v) already installed"
 else
     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    sudo apt install -y nodejs
+    apt_need nodejs
 fi
-success "Node.js $(node -v 2>/dev/null || echo 'pending') ready"
+success "Node.js $(node -v 2>/dev/null || echo pending) ready"
 
-# -- Step 4: JetBrainsMono Nerd Font --
-step "4/12 - Installing JetBrainsMono Nerd Font"
+step "6/10 - Fonts"
 FONT_DIR="$HOME/.local/share/fonts"
 if ls "$FONT_DIR"/JetBrainsMonoNerd* &>/dev/null; then
-    warn "JetBrainsMono Nerd Font already installed, skipping"
+    info "JetBrainsMono Nerd Font already installed"
 else
     mkdir -p "$FONT_DIR"
     NERD_VERSION="v3.4.0"
-    curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_VERSION}/JetBrainsMono.tar.xz" -o /tmp/JetBrainsMono.tar.xz
+    curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_VERSION}/JetBrainsMono.tar.xz" \
+        -o /tmp/JetBrainsMono.tar.xz
     tar -xf /tmp/JetBrainsMono.tar.xz -C "$FONT_DIR"
     rm -f /tmp/JetBrainsMono.tar.xz
-    fc-cache -fv
+    fc-cache -f
+    success "JetBrainsMono Nerd Font installed"
 fi
-success "Nerd Font installed"
 
-# -- Step 5: Dracula GTK theme --
-step "5/12 - Installing Dracula GTK theme"
+step "7/10 - GTK theme"
 if [ -d "$HOME/.themes/Dracula" ]; then
-    warn "Dracula GTK theme already installed, skipping"
+    info "Dracula GTK theme already present"
 else
-    git clone https://github.com/dracula/gtk.git "$HOME/.themes/Dracula"
+    git clone --depth 1 https://github.com/dracula/gtk.git "$HOME/.themes/Dracula"
+    success "Dracula GTK theme installed"
 fi
-success "Dracula GTK theme ready"
-
-# -- Step 6: Dracula icon theme --
-step "6/12 - Installing Dracula icon theme"
 if [ -d "$HOME/.icons/Dracula" ]; then
-    warn "Dracula icon theme already installed, skipping"
+    info "Dracula icon theme already present"
 else
-    git clone https://github.com/m4thewz/dracula-icons.git /tmp/dracula-icons
+    git clone --depth 1 https://github.com/m4thewz/dracula-icons.git /tmp/dracula-icons
     mkdir -p "$HOME/.icons/Dracula"
     cp -r /tmp/dracula-icons/* "$HOME/.icons/Dracula/"
     rm -rf /tmp/dracula-icons
+    success "Dracula icon theme installed"
 fi
-success "Dracula icon theme ready"
 
-# -- Step 7: Deploy config files --
-step "7/12 - Deploying configuration files"
+fi  # end CONFIGS_ONLY guard
+
+# ---------------------------------------------------------------------------
+step "8/10 - Configuration files"
+# ---------------------------------------------------------------------------
 declare -A CONFIG_MAP=(
     ["configs/hypr/hyprland.conf"]="$HOME/.config/hypr/hyprland.conf"
     ["configs/waybar/config.jsonc"]="$HOME/.config/waybar/config.jsonc"
@@ -154,284 +252,202 @@ for src in "${!CONFIG_MAP[@]}"; do
     info "-> $dest"
 done
 
-# Rofi theme goes to share directory
+# The shared palette. GTK CSS has no ~ expansion and no search path, so every
+# stylesheet that says `@import "palette.css"` needs a copy next to it.
+for d in waybar swaync wlogout gtklock; do
+    mkdir -p "$HOME/.config/$d"
+    cp "$SCRIPT_DIR/configs/theme/dracula.css" "$HOME/.config/$d/palette.css"
+done
+info "-> palette.css deployed to waybar, swaync, wlogout, gtklock"
+
 mkdir -p "$HOME/.local/share/rofi/themes"
 cp "$SCRIPT_DIR/configs/rofi/spotlight-dark.rasi" "$HOME/.local/share/rofi/themes/spotlight-dark.rasi"
 info "-> ~/.local/share/rofi/themes/spotlight-dark.rasi"
 
-# Fix wlogout icon paths (CSS doesn't expand ~ so we use absolute paths)
+# wlogout's CSS references icons by absolute path; GTK will not expand ~.
 sed -i "s|/HOME_DIR|$HOME|g" "$HOME/.config/wlogout/style.css"
-info "-> Fixed wlogout icon paths for $HOME"
 
-# Generate machine-local Hyprland env config (GPU / DRM detection)
+# -- Machine-local Hyprland environment -------------------------------------
+# Kept in its own file so a config redeploy never clobbers GPU-specific tuning.
 ENV_LOCAL="$HOME/.config/hypr/env-local.conf"
-info "Detecting GPU / DRM devices …"
 DRM_CARDS=""
 for card in /dev/dri/card*; do
-    # Skip simple-framebuffer and non-GPU DRM nodes
-    if udevadm info "$card" 2>/dev/null | grep -q "platform-simple-framebuffer"; then
-        continue
-    fi
-    if [ -n "$DRM_CARDS" ]; then
-        DRM_CARDS="$DRM_CARDS:$card"
-    else
-        DRM_CARDS="$card"
-    fi
+    [ -e "$card" ] || continue
+    udevadm info "$card" 2>/dev/null | grep -q "platform-simple-framebuffer" && continue
+    DRM_CARDS="${DRM_CARDS:+$DRM_CARDS:}$card"
 done
 
 cat > "$ENV_LOCAL" <<EOF
-# Auto-generated by setup.sh -- machine-specific environment overrides
-# Edit this file for GPU-specific settings; it won't be overwritten by config deploys
+# Auto-generated by setup.sh — machine-specific environment overrides.
+# Safe to edit: config redeploys do not overwrite this file's siblings.
 # DRM devices detected: $DRM_CARDS
 env = WLR_DRM_DEVICES,$DRM_CARDS
 EOF
 
 if lspci | grep -qi 'nvidia'; then
-    cat >> "$ENV_LOCAL" << 'ENVEOF'
+    cat >> "$ENV_LOCAL" <<'ENVEOF'
 
-# NVIDIA GPU
+# NVIDIA
 env = GBM_BACKEND,nvidia-drm
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
 env = LIBVA_DRIVER_NAME,nvidia
 ENVEOF
-    success "NVIDIA env vars written to env-local.conf"
+    info "NVIDIA env vars written"
 elif lspci | grep -qi 'intel.*graphics'; then
-    cat >> "$ENV_LOCAL" << 'ENVEOF'
+    cat >> "$ENV_LOCAL" <<'ENVEOF'
 
-# Intel GPU
-env = WLR_DRM_NO_ATOMIC,0
+# Intel
 env = LIBVA_DRIVER_NAME,iHD
 ENVEOF
-    success "Intel GPU env vars written to env-local.conf"
-else
-    info "No specific GPU detected -- using defaults"
+    info "Intel env vars written"
 fi
 
-# Common Wayland env vars (useful for all GPU types)
-cat >> "$ENV_LOCAL" << 'ENVEOF'
+cat >> "$ENV_LOCAL" <<'ENVEOF'
 
-# Wayland application support
+# Wayland-native application hints
 env = MOZ_ENABLE_WAYLAND,1
 env = MOZ_DBUS_REMOTE,1
 env = GDK_BACKEND,wayland,x11
 env = SDL_VIDEODRIVER,wayland
 env = CLUTTER_BACKEND,wayland
+env = QT_QPA_PLATFORM,wayland;xcb
 env = ELECTRON_OZONE_PLATFORM_HINT,auto
 ENVEOF
-info "→ $ENV_LOCAL (DRM devices: $DRM_CARDS)"
-
 success "Config files deployed"
 
-# -- Step 8: Build & install awww (animated wallpaper daemon) --
-step "8/12 - Building awww (animated wallpaper daemon)"
-# Install Rust via rustup (distro packages are too old for awww)
-if command -v rustup &>/dev/null; then
-    warn "rustup already installed, updating toolchain..."
-    rustup update stable
-elif command -v "$HOME/.cargo/bin/rustup" &>/dev/null; then
-    warn "rustup found in ~/.cargo/bin, updating toolchain..."
-    "$HOME/.cargo/bin/rustup" update stable
-else
-    info "Installing Rust via rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-fi
-export PATH="$HOME/.cargo/bin:$PATH"
-info "Using rustc $(rustc --version)"
-
-AWWW_DIR="/tmp/awww-build"
-if command -v awww &>/dev/null; then
-    warn "awww already installed, skipping build"
-else
-    git clone --depth=1 https://codeberg.org/LGFae/awww.git "$AWWW_DIR"
-    if [ -f "$AWWW_DIR/Cargo.toml" ]; then
-        (cd "$AWWW_DIR" && cargo build --release)
-        cp "$AWWW_DIR/target/release/awww" "$HOME/.local/bin/"
-        cp "$AWWW_DIR/target/release/awww-daemon" "$HOME/.local/bin/"
-        chmod +x "$HOME/.local/bin/awww" "$HOME/.local/bin/awww-daemon"
-        rm -rf "$AWWW_DIR"
-    else
-        warn "awww clone failed — install manually from https://codeberg.org/LGFae/awww"
-    fi
-fi
-mkdir -p "$HOME/.cache/awww"
-success "awww ready"
-
-# -- Step 9: Build swaync from source --
-step "9/12 - Building swaync 0.12.4 (notification daemon)"
-SWAYNC_VERSION="v0.12.4"
-SWAYNC_BUILD_DIR="/tmp/swaync-build"
-if swaync --version 2>/dev/null | grep -q "0.12.4"; then
-    warn "swaync 0.12.4 already installed, skipping build"
-else
-    info "Cloning swaync ${SWAYNC_VERSION}..."
-    rm -rf "$SWAYNC_BUILD_DIR"
-    git clone --branch "$SWAYNC_VERSION" --depth 1 \
-        https://github.com/ErikReider/SwayNotificationCenter.git "$SWAYNC_BUILD_DIR"
-    info "Configuring..."
-    meson setup "$SWAYNC_BUILD_DIR/build" "$SWAYNC_BUILD_DIR" --prefix=/usr
-    info "Compiling..."
-    ninja -C "$SWAYNC_BUILD_DIR/build"
-    info "Installing..."
-    sudo ninja -C "$SWAYNC_BUILD_DIR/build" install
-    rm -rf "$SWAYNC_BUILD_DIR"
-fi
-success "swaync $(swaync --version 2>/dev/null | head -1) ready"
-
-# Mask mako so it doesn't conflict with swaync over org.freedesktop.Notifications
-# (mako is installed as a dependency but swaync is the intended notification daemon)
-systemctl --user mask mako.service 2>/dev/null && \
-    info "Masked mako.service (swaync is primary notification daemon)" || true
-# Mask snap prompting client if present (fails on systems without AppArmor prompting)
-systemctl --user mask snap.prompting-client.daemon.service 2>/dev/null && \
-    info "Masked snap.prompting-client.daemon.service" || true
-systemctl --user daemon-reload
-
-# -- Step 10: Helper scripts --
-step "10/12 - Installing helper scripts"
+# ---------------------------------------------------------------------------
+step "9/10 - Helper scripts and session wiring"
+# ---------------------------------------------------------------------------
 mkdir -p "$HOME/.local/bin"
 for script in "$SCRIPT_DIR"/scripts/*; do
-    name="$(basename "$script")"
-    cp "$script" "$HOME/.local/bin/$name"
-    chmod +x "$HOME/.local/bin/$name"
-    info "-> ~/.local/bin/$name"
+    [ -f "$script" ] || continue
+    install -m 0755 "$script" "$HOME/.local/bin/$(basename "$script")"
+    info "-> ~/.local/bin/$(basename "$script")"
 done
 
-# Generate NVIDIA Hyprland wrapper (sets AQ_DRM_DEVICES by PCI address)
-if lspci | grep -qi 'nvidia'; then
-    cat > "$HOME/.local/bin/hyprland-nvidia" << 'WRAPEOF'
-#!/bin/bash
-export GBM_BACKEND=nvidia-drm
-export __GLX_VENDOR_LIBRARY_NAME=nvidia
-export LIBVA_DRIVER_NAME=nvidia
-
-# Auto-detect primary NVIDIA GPU for Aquamarine
-# Uses the first NVIDIA card found; override AQ_DRM_DEVICES if needed
-for card_dir in /sys/class/drm/card[0-9]; do
-    if [ -d "$card_dir/device" ]; then
-        driver=$(basename "$(readlink -f "$card_dir/device/driver")" 2>/dev/null)
-        if [ "$driver" = "nvidia" ] && [ -z "$AQ_DRM_DEVICES" ]; then
-            export AQ_DRM_DEVICES=/dev/dri/$(basename "$card_dir")
-        fi
-    fi
-done
-
-exec Hyprland "$@"
-WRAPEOF
-    chmod +x "$HOME/.local/bin/hyprland-nvidia"
-    success "NVIDIA Hyprland wrapper installed"
-
-    # Update desktop entry to use wrapper
-    if [ -f /usr/share/wayland-sessions/hyprland.desktop ]; then
-        sudo sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/hyprland-nvidia|" /usr/share/wayland-sessions/hyprland.desktop
-        success "Desktop entry updated to use NVIDIA wrapper"
-    fi
+# Record which polkit agent to launch, so hyprland.conf can stay generic.
+mkdir -p "$HOME/.config/hypr"
+if [ -n "${POLKIT_AGENT:-}" ] && [ -x "${POLKIT_AGENT:-}" ]; then
+    echo "exec-once = $POLKIT_AGENT" > "$HOME/.config/hypr/polkit-local.conf"
+elif [ -x /usr/libexec/hyprpolkitagent ]; then
+    echo "exec-once = /usr/libexec/hyprpolkitagent" > "$HOME/.config/hypr/polkit-local.conf"
+elif [ -x /usr/bin/lxpolkit ]; then
+    echo "exec-once = /usr/bin/lxpolkit" > "$HOME/.config/hypr/polkit-local.conf"
+else
+    : > "$HOME/.config/hypr/polkit-local.conf"
+    warn "No polkit agent found — authentication prompts will not appear"
 fi
+info "-> ~/.config/hypr/polkit-local.conf"
 
-# Ensure ~/.local/bin is in PATH
-if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-    info "Added ~/.local/bin to PATH in .bashrc"
+if [ "$CONFIGS_ONLY" = 0 ]; then
+    # swaync owns org.freedesktop.Notifications. mako arrives as a dependency of
+    # some Wayland metapackages and will fight it for the bus name.
+    systemctl --user mask mako.service 2>/dev/null \
+        && info "Masked mako.service (swaync is the notification daemon)" || true
+    systemctl --user daemon-reload 2>/dev/null || true
 fi
 success "Helper scripts installed"
 
-# Basic launcher sanity checks
-if command -v open-network-settings &>/dev/null; then
-    success "Network launcher installed"
+# ---------------------------------------------------------------------------
+if [ "$CONFIGS_ONLY" = 0 ]; then
+step "10/10 - Wallpaper daemon, assets, and tuning"
+# ---------------------------------------------------------------------------
+# awww is not packaged anywhere; distro Rust is usually too old to build it.
+if command -v rustup &>/dev/null || [ -x "$HOME/.cargo/bin/rustup" ]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup update stable >/dev/null 2>&1 || true
 else
-    warn "Network launcher not found in PATH yet (new shell may be needed)"
+    info "Installing Rust via rustup (needed to build awww)"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-if command -v open-bluetooth-settings &>/dev/null; then
-    success "Bluetooth launcher installed"
+if command -v awww &>/dev/null || [ -x "$HOME/.local/bin/awww" ]; then
+    info "awww already installed"
 else
-    warn "Bluetooth launcher not found in PATH yet (new shell may be needed)"
-fi
-
-# -- Step 11: GTK theme settings --
-step "11/12 - Setting GTK theme"
-gsettings set org.gnome.desktop.interface gtk-theme 'Dracula' 2>/dev/null || true
-gsettings set org.gnome.desktop.interface icon-theme 'Dracula' 2>/dev/null || true
-gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
-gsettings set org.gnome.desktop.interface cursor-size 48 2>/dev/null || true
-success "GTK theme configured"
-
-# -- Step 12: Flatpak apps --
-step "12/12 - Installing Flatpak apps"
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-flatpak install -y flathub org.gnome.World.PikaBackup 2>/dev/null || warn "Pika Backup install failed (try manually)"
-success "Flatpak apps installed"
-
-# -- Desktop assets (wallpaper + wlogout icons) --
-step "Bonus - Desktop assets from github.com/fursman/desktop-assets"
-
-ASSETS_DIR="/tmp/desktop-assets-setup"
-ASSETS_URL="https://github.com/fursman/Desktop-Assets.git"
-mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.cache/awww"
-
-if [ ! -d "$ASSETS_DIR" ]; then
-    git clone --depth 1 "$ASSETS_URL" "$ASSETS_DIR"
-fi
-
-# Wallpaper -- Donuts collection, use 1.jpg as default
-WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
-mkdir -p "$WALLPAPER_DIR/Donuts"
-if [ -d "$ASSETS_DIR/Wallpaper/Donuts" ]; then
-    cp "$ASSETS_DIR/Wallpaper/Donuts"/*.jpg "$WALLPAPER_DIR/Donuts/" 2>/dev/null || true
-    # Set first donut as the active wallpaper
-    if [ -f "$WALLPAPER_DIR/Donuts/1.jpg" ]; then
-        cp "$WALLPAPER_DIR/Donuts/1.jpg" "$WALLPAPER_DIR/current.jpg"
-        success "Donut wallpaper set (8 variants in ~/Pictures/Wallpapers/Donuts/)"
+    AWWW_DIR=$(mktemp -d)
+    if git clone --depth=1 https://codeberg.org/LGFae/awww.git "$AWWW_DIR" 2>/dev/null \
+       && [ -f "$AWWW_DIR/Cargo.toml" ]; then
+        ( cd "$AWWW_DIR" && cargo build --release )
+        install -m 0755 "$AWWW_DIR/target/release/awww"        "$HOME/.local/bin/"
+        install -m 0755 "$AWWW_DIR/target/release/awww-daemon" "$HOME/.local/bin/"
+        success "awww built and installed"
+    else
+        warn "awww clone/build failed — wallpaper will fall back to hyprpaper"
     fi
-else
-    warn "Could not find Donuts wallpapers in desktop-assets"
+    rm -rf "$AWWW_DIR"
 fi
+mkdir -p "$HOME/.cache/awww"
 
-# wlogout icons
-WLOGOUT_ICONS="$HOME/.config/wlogout/icons"
-mkdir -p "$WLOGOUT_ICONS"
-if [ -d "$ASSETS_DIR/wlogout" ]; then
-    cp "$ASSETS_DIR/wlogout"/*.png "$WLOGOUT_ICONS/" 2>/dev/null || true
-    success "wlogout icons installed"
+# -- Desktop assets --
+ASSETS_DIR=$(mktemp -d)
+mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.config/wlogout/icons"
+if git clone --depth 1 https://github.com/fursman/Desktop-Assets.git "$ASSETS_DIR" 2>/dev/null; then
+    if [ -d "$ASSETS_DIR/Wallpaper/Donuts" ]; then
+        mkdir -p "$HOME/Pictures/Wallpapers/Donuts"
+        cp "$ASSETS_DIR/Wallpaper/Donuts"/*.jpg "$HOME/Pictures/Wallpapers/Donuts/" 2>/dev/null || true
+        [ -f "$HOME/Pictures/Wallpapers/Donuts/1.jpg" ] && [ ! -f "$HOME/Pictures/Wallpapers/current.jpg" ] \
+            && cp "$HOME/Pictures/Wallpapers/Donuts/1.jpg" "$HOME/Pictures/Wallpapers/current.jpg"
+        success "Wallpapers installed"
+    fi
+    cp "$ASSETS_DIR/wlogout"/*.png "$HOME/.config/wlogout/icons/" 2>/dev/null \
+        && success "wlogout icons installed" || warn "wlogout icons not found in assets"
 else
-    warn "Could not find wlogout icons in desktop-assets"
+    warn "Could not clone Desktop-Assets"
 fi
-
 rm -rf "$ASSETS_DIR"
 
-# -- System tuning --
-step "System tuning"
+# -- Flatpak --
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+flatpak install -y --noninteractive flathub org.gnome.World.PikaBackup 2>/dev/null \
+    || warn "Pika Backup install skipped"
 
-# Sysctl: lower swappiness, raise inotify limits
+# -- GTK settings --
+gsettings set org.gnome.desktop.interface gtk-theme     'Dracula'     2>/dev/null || true
+gsettings set org.gnome.desktop.interface icon-theme    'Dracula'     2>/dev/null || true
+gsettings set org.gnome.desktop.interface color-scheme  'prefer-dark' 2>/dev/null || true
+gsettings set org.gnome.desktop.interface cursor-size   48            2>/dev/null || true
+
+# -- Sysctl --
+# swappiness=10: 64 GB of RAM, prefer dropping cache over swapping.
+# inotify limits: the defaults are far too low for editors and file watchers.
 if [ ! -f /etc/sysctl.d/99-desktop-tune.conf ]; then
-    sudo tee /etc/sysctl.d/99-desktop-tune.conf > /dev/null << 'SYSEOF'
+    sudo tee /etc/sysctl.d/99-desktop-tune.conf >/dev/null <<'SYSEOF'
 vm.swappiness = 10
 vm.vfs_cache_pressure = 50
 fs.inotify.max_user_watches = 524288
 fs.inotify.max_user_instances = 512
 SYSEOF
-    sudo sysctl --system > /dev/null 2>&1
-    success "sysctl tuning applied (swappiness=10, inotify watches=524288)"
+    sudo sysctl --system >/dev/null 2>&1
+    success "sysctl tuning applied"
 else
-    warn "sysctl tuning already applied, skipping"
+    info "sysctl tuning already present"
 fi
 
-# NVMe I/O scheduler: use 'none' for SSDs
-if [ -d /sys/block/nvme0n1 ]; then
-    echo "none" | sudo tee /sys/block/nvme0n1/queue/scheduler > /dev/null 2>&1 || true
-    if [ ! -f /etc/udev/rules.d/60-io-scheduler.rules ]; then
-        sudo tee /etc/udev/rules.d/60-io-scheduler.rules > /dev/null << 'UDEVEOF'
+# -- NVMe scheduler --
+# NVMe has its own deep queues; an I/O scheduler on top only adds latency.
+if [ ! -f /etc/udev/rules.d/60-io-scheduler.rules ]; then
+    sudo tee /etc/udev/rules.d/60-io-scheduler.rules >/dev/null <<'UDEVEOF'
 ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/scheduler}="none"
 UDEVEOF
-        success "NVMe I/O scheduler set to none"
-    fi
+    sudo udevadm control --reload-rules
+    success "NVMe I/O scheduler rule installed"
 fi
 
-# -- Done --
+fi  # end CONFIGS_ONLY guard
+
+# ---------------------------------------------------------------------------
 echo ""
 echo -e "${GREEN}${BOLD}========================================${NC}"
-echo -e "${GREEN}${BOLD}  Hyprland desktop setup complete!      ${NC}"
+echo -e "${GREEN}${BOLD}  Hyprland desktop setup complete       ${NC}"
 echo -e "${GREEN}${BOLD}========================================${NC}"
 echo ""
-echo -e "  ${CYAN}Log out and select ${BOLD}Hyprland${NC}${CYAN} from your display manager.${NC}"
-echo -e "  ${CYAN}Press ${BOLD}Super + Space${NC}${CYAN} for the keybind cheatsheet.${NC}"
+echo -e "  Log out and pick ${BOLD}Hyprland${NC} at the display manager."
+echo -e "  ${BOLD}Super + Space${NC} shows the keybind cheatsheet."
 echo ""
+if pgrep -x Hyprland >/dev/null; then
+    echo -e "  Already in Hyprland? Apply now without logging out:"
+    echo -e "    ${CYAN}hyprctl reload${NC}"
+    echo -e "    ${CYAN}pkill -SIGUSR2 waybar${NC}"
+    echo ""
+fi

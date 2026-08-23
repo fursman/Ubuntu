@@ -41,6 +41,7 @@ Print                  Full Screen -> Clipboard
 Super + F12            Full Screen -> File
 Super + Shift + S      Region -> Clipboard
 Super + Shift + F12    Region -> File
+Super + Shift + A      Region -> Annotate (Swappy)
 Super + Shift + R      Record Region (toggle)
 Super + Alt + R        Record Full Screen (toggle)
 <b>--- Utilities ---</b>
