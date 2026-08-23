@@ -1,0 +1,16 @@
+/* Append to configs/waybar/style.css.
+   Mirrors GNOME's screen-recording indicator: a red pill you cannot miss. */
+#custom-caps-sudo {
+    background-color: #e01b24;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 0 10px;
+    margin: 4px 4px;
+    border-radius: 99px;
+}
+
+#custom-caps-sudo.disarmed {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}

@@ -23,8 +23,48 @@ TAG=caps-sudo
 log(){ logger -t "$TAG" -- "$*" 2>/dev/null || true; }
 
 led_paths(){ ls /sys/class/leds/*capslock*/brightness 2>/dev/null || true; }
-led_on(){  for p in $(led_paths); do echo 1 >"$p" 2>/dev/null || true; done; }
-led_off(){ for p in $(led_paths); do echo 0 >"$p" 2>/dev/null || true; done; }
+
+# Write $1 to every capslock LED, then read it back.
+#
+# A successful write is NOT proof the light changed. Apple's applespi accepts
+# the write, returns no error, and drops it -- the MacBook CapsLock LED never
+# lights. Reading back is the only honest check. Also note that once keyd is
+# running it registers a virtual keyboard which exposes its own phantom
+# *capslock* LED node, so the glob can match devices with no hardware behind
+# them at all.
+#
+# Returns 0 if at least one real LED held the value.
+led_set(){
+  local want=$1 held=1 p
+  for p in $(led_paths); do echo "$want" >"$p" 2>/dev/null || true; done
+  for p in $(led_paths); do
+    [ "$(cat "$p" 2>/dev/null)" = "$want" ] && held=0
+  done
+  return $held
+}
+led_on(){  led_set 1; }
+led_off(){ led_set 0; }
+
+# Does this machine's CapsLock LED actually work? Answers the question directly
+# instead of leaving you guessing why the light never came on.
+led_test(){
+  local any=0 p
+  for p in $(led_paths); do any=1; echo "  LED node: $p"; done
+  if [ "$any" -eq 0 ]; then
+    echo "No *capslock* LED nodes found. Use the on-screen indicator."
+    return 1
+  fi
+  echo "Lighting for 2s..."
+  if led_set 1; then
+    sleep 2; led_set 0 || true
+    echo "OK -- the LED held the value. Hardware indicator works here."
+    return 0
+  fi
+  led_set 0 || true
+  echo "The LED did NOT hold the value: this driver ignores brightness writes"
+  echo "(known on Apple applespi keyboards). Rely on the on-screen indicator."
+  return 1
+}
 
 is_armed(){ [ -f "$ARMED_FILE" ]; }
 
@@ -72,22 +112,118 @@ disarm(){
   log "disarmed"
 }
 
+# How to authenticate an arm request. "polkit" raises the desktop's native
+# authentication dialog; "terminal" opens a kitty window and lets sudo prompt.
+# Override with CAPS_SUDO_AUTH=terminal for sessions with no polkit agent.
+AUTH_METHOD=${CAPS_SUDO_AUTH:-polkit}
+POLKIT_POLICY=/usr/share/polkit-1/actions/com.fursman.caps-sudo.policy
+
+# Native OS authentication dialog.
+#
+# Two separate traps here, both of which silently break authentication:
+#
+# 1. We must drop out of root before calling pkexec. keyd runs this helper as
+#    root, and polkit authorises a root caller unconditionally -- calling
+#    pkexec straight from here would arm the machine with NO prompt at all.
+#
+# 2. Dropping to $TARGET_USER is still not enough. polkit finds the
+#    authentication agent via the caller's *logind session*, and keyd is a
+#    system daemon with no session -- so `sudo -u "$TARGET_USER" pkexec` exits
+#    instantly and no dialog is ever drawn. Testing this by hand from a
+#    terminal hides the bug, because a shell inherits your login session.
+#
+# So we hand the job to the user's systemd manager with `systemd-run --user`.
+# The transient unit runs inside user@.service, which does have a session, and
+# polkit then raises the dialog correctly.
+#
+# The action is auth_admin (never auth_admin_keep), so every arm needs a fresh
+# password; polkit never caches this one. The fixed --unit name means a second
+# tap while a prompt is already pending is a no-op instead of stacking dialogs.
+polkit_auth(){
+  local rt; rt=$(user_runtime)
+  # shellcheck disable=SC2046
+  setsid sudo -u "$TARGET_USER" env $(user_env) \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
+    systemd-run --user --quiet --collect --unit=caps-sudo-auth \
+      pkexec "$HELPER" arm-commit 2>&1 | logger -t "$TAG" &
+}
+
+# Fallback for sessions with no polkit agent (bare WMs): pop a terminal and let
+# sudo itself do the authenticating.
+#
+# Do not hardcode one terminal. The upstream version assumed kitty, which is
+# present on this repo's Hyprland target but not on a stock Ubuntu GNOME box --
+# and because the spawn is backgrounded with output discarded, a missing kitty
+# meant CapsLock silently did nothing at all. Their argv shapes differ enough
+# that "$term -e" is not portable, so each one we support is spelled out.
+TERMINALS="kitty alacritty foot ptyxis gnome-terminal konsole xterm"
+
+find_terminal(){
+  local t
+  for t in $TERMINALS; do
+    command -v "$t" >/dev/null 2>&1 && { echo "$t"; return 0; }
+  done
+  return 1
+}
+
+terminal_auth(){
+  local term title cmd
+  title="Arm passwordless sudo"
+  if ! term=$(find_terminal); then
+    log "no polkit agent and no known terminal: cannot prompt"
+    notify "caps-sudo: cannot prompt" "No polkit agent, and no known terminal is installed."
+    return 1
+  fi
+  cmd='echo "Authenticate to ARM passwordless sudo (Ctrl-C cancels):"; echo;
+       sudo -k;
+       if sudo '"$HELPER"' arm-commit; then :; else echo; echo "Cancelled — still disarmed."; sleep 1.5; fi'
+  case "$term" in
+    kitty)          set -- kitty --class caps-sudo-auth --title "$title" -- bash -c "$cmd" ;;
+    alacritty)      set -- alacritty --class caps-sudo-auth --title "$title" -e bash -c "$cmd" ;;
+    foot)           set -- foot --app-id=caps-sudo-auth --title="$title" bash -c "$cmd" ;;
+    ptyxis)         set -- ptyxis --new-window -- bash -c "$cmd" ;;
+    gnome-terminal) set -- gnome-terminal --title="$title" -- bash -c "$cmd" ;;
+    konsole)        set -- konsole -e bash -c "$cmd" ;;
+    xterm)          set -- xterm -T "$title" -e bash -c "$cmd" ;;
+  esac
+  log "terminal fallback via $term"
+  # shellcheck disable=SC2046
+  setsid sudo -u "$TARGET_USER" env $(user_env) "$@" >/dev/null 2>&1 &
+}
+
+use_polkit(){
+  [ "$AUTH_METHOD" = polkit ] && command -v pkexec >/dev/null 2>&1 && [ -f "$POLKIT_POLICY" ]
+}
+
 # Entry point from keyd (root context, no user session attached).
 keypress(){
   if is_armed; then
     disarm
+  elif use_polkit; then
+    polkit_auth
   else
-    # Detach into the user's session and demand a password before arming.
-    # Inside kitty: `sudo -k` clears any cached grant, then the sudo call itself
-    # is the authentication; on success it runs arm-commit as root.
-    # shellcheck disable=SC2046
-    setsid sudo -u "$TARGET_USER" env $(user_env) \
-      kitty --class caps-sudo-auth --title "Arm passwordless sudo" -- \
-      bash -c 'echo "Authenticate to ARM passwordless sudo (Ctrl-C cancels):"; echo;
-               sudo -k;
-               if sudo '"$HELPER"' arm-commit; then :; else echo; echo "Cancelled — still disarmed."; sleep 1.5; fi' \
-      >/dev/null 2>&1 &
+    terminal_auth
   fi
+}
+
+# Long-running JSON stream for waybar (and anything else that follows stdout).
+# Runs fine as your normal user: /etc/sudoers.d is world-listable, so testing
+# whether the armed file EXISTS needs no privilege -- and its contents, which
+# are root-only, are never read.
+waybar_stream(){
+  local last="" cur
+  while :; do
+    is_armed && cur=armed || cur=disarmed
+    if [ "$cur" != "$last" ]; then
+      if [ "$cur" = armed ]; then
+        printf '{"text":"sudo armed","class":"armed","tooltip":"Passwordless sudo is LIVE - tap CapsLock to disarm."}\n'
+      else
+        printf '{"text":"","class":"disarmed","tooltip":""}\n'
+      fi
+      last="$cur"
+    fi
+    sleep 1
+  done
 }
 
 case "${1:-}" in
@@ -95,5 +231,7 @@ case "${1:-}" in
   arm-commit) arm_commit ;;
   disarm)     disarm ;;
   status)     is_armed && echo armed || echo disarmed ;;
-  *) echo "usage: caps-sudo {keypress|arm-commit|disarm|status}" >&2; exit 2 ;;
+  led-test)   led_test ;;
+  waybar)     waybar_stream ;;
+  *) echo "usage: caps-sudo {keypress|arm-commit|disarm|status|led-test|waybar}" >&2; exit 2 ;;
 esac
