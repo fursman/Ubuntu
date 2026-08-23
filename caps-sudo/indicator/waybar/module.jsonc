@@ -1,0 +1,16 @@
+// caps-sudo indicator for waybar.
+//
+// Add "custom/caps-sudo" to modules-left (or wherever it should sit) and paste
+// this block into configs/waybar/config.jsonc.
+//
+// `caps-sudo waybar` streams one JSON line per state CHANGE and runs as your
+// normal user -- /etc/sudoers.d is world-listable, so testing whether the armed
+// file exists needs no privilege, and its root-only contents are never read.
+// When disarmed it emits an empty "text", which hides the module entirely.
+"custom/caps-sudo": {
+    "exec": "/usr/local/sbin/caps-sudo waybar",
+    "return-type": "json",
+    "format": "󰌾 {}",
+    "tooltip": true,
+    "on-click": "sudo -n /usr/local/sbin/caps-sudo disarm"
+}

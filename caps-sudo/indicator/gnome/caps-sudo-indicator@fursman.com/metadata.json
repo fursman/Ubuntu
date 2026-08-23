@@ -1,0 +1,7 @@
+{
+  "uuid": "caps-sudo-indicator@fursman.com",
+  "name": "caps-sudo Indicator",
+  "description": "Shows a red top-bar pill while caps-sudo passwordless sudo is ARMED. Click to disarm.",
+  "shell-version": ["50"],
+  "version": 1
+}

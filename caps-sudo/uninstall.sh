@@ -21,6 +21,15 @@ if [ -f /etc/keyd/default.conf ]; then
   systemctl restart keyd 2>/dev/null || true
 fi
 
+rm -f /usr/share/polkit-1/actions/com.fursman.caps-sudo.policy
+
+# on-screen indicator (installed into the invoking user's home)
+OWNER="${SUDO_USER:-}"
+if [ -n "$OWNER" ]; then
+  OWNER_HOME=$(getent passwd "$OWNER" | cut -d: -f6)
+  rm -rf "$OWNER_HOME/.local/share/gnome-shell/extensions/caps-sudo-indicator@fursman.com"
+fi
+
 rm -f /usr/local/sbin/caps-sudo
 echo ">> caps-sudo removed. (keyd left installed; 'sudo apt remove keyd' to drop it too.)"
 echo ">> CapsLock returns to normal after: sudo keyd reload"
