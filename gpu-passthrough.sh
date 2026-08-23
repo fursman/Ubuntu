@@ -376,6 +376,14 @@ sudo install -m 0644 "$PT/udev/99-8bitdo-passthrough.rules" /etc/udev/rules.d/99
 sudo udevadm control --reload-rules
 success "udev rules installed (cpu governor, usb wakeup, 8BitDo auto-attach)"
 
+# Day-to-day lifecycle helpers. lg-start refuses to run and says why if the
+# GPU is not actually bound to vfio-pci, which is the mistake you make after
+# forgetting to pick the passthrough entry at boot.
+mkdir -p "$HOME/.local/bin"
+install -m 0755 "$PT/bin/lg-start" "$HOME/.local/bin/lg-start"
+install -m 0755 "$PT/bin/lg-stop"  "$HOME/.local/bin/lg-stop"
+success "lg-start / lg-stop installed to ~/.local/bin"
+
 if [ "$SKIP_VM" = 1 ]; then
     info "--no-vm given, skipping domain definition"
 elif sudo virsh dominfo win10-lg &>/dev/null; then

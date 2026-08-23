@@ -285,9 +285,15 @@ This laptop otherwise wakes from suspend spontaneously.
 ./gpu-passthrough.sh --check
 
 # reboot, pick "Ubuntu (GPU Passthrough)" from GRUB, then:
-virsh start win10-lg
-looking-glass-client
+lg-start        # starts the VM if needed, loads kvmfr, launches the client
+lg-stop         # graceful shutdown, force-destroys after a 30s timeout
 ```
+
+`lg-start` checks that `01:00.0` is actually bound to `vfio-pci` before doing
+anything, and tells you to reboot into the passthrough entry if it is not —
+which is the mistake you make after forgetting to pick it at the GRUB menu.
+If the client is already running it just focuses the window instead of
+starting a second one.
 
 To go back to CUDA and an NVIDIA-driven desktop, reboot and take the default
 entry.

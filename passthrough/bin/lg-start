@@ -1,0 +1,36 @@
+#!/bin/bash
+# Start the Windows VM and launch Looking Glass (KVMFR mode)
+set -e
+
+# If looking-glass-client is already running, just focus it
+if pgrep -x looking-glass-c > /dev/null 2>&1; then
+    hyprctl dispatch focuswindow "class:looking-glass-client"
+    exit 0
+fi
+
+# Check if GPU is bound to vfio-pci
+if ! lspci -nnk -s 01:00.0 | grep -q "vfio-pci"; then
+    echo "ERROR: GPU is not bound to vfio-pci."
+    echo "You need to boot into the 'Ubuntu (GPU Passthrough)' GRUB entry first."
+    notify-send "Looking Glass" "GPU not in passthrough mode. Reboot and select 'Ubuntu (GPU Passthrough)' from GRUB." -u critical
+    exit 1
+fi
+
+# Check kvmfr module
+if [ ! -e /dev/kvmfr0 ]; then
+    echo "Loading kvmfr module..."
+    sudo modprobe kvmfr static_size_mb=128
+    sleep 0.5
+fi
+
+# Start VM if not already running
+if ! sudo virsh list --name 2>/dev/null | grep -q win10-lg; then
+    echo "Starting Windows VM..."
+    sudo virsh start win10-lg
+    echo "Waiting for Looking Glass host to initialize..."
+    sleep 5
+fi
+
+echo "Launching Looking Glass client..."
+looking-glass-client -f /dev/kvmfr0 win:jitRender=yes &
+disown

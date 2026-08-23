@@ -229,11 +229,12 @@ The status bar shows (left to right):
 │   ├── udev/*.rules               # kvmfr perms, 8BitDo, governor, USB wake
 │   ├── acpi/ssdt-battery.asl      # Fake battery (recompilable source)
 │   ├── vm/win10-lg.xml            # libvirt domain
-│   ├── bin/{8bitdo-passthrough,dump-vbios.sh}
+│   ├── bin/{lg-start,lg-stop,8bitdo-passthrough,dump-vbios.sh}
 │   └── assets/                    # vBIOS lives here, gitignored
 └── scripts/                       # Installed to ~/.local/bin
     ├── lock-screen
     ├── wireless-display
+    ├── keyboard-fire            # Razer per-key RGB flame effect (openrazer)
     ├── hypr-cheatsheet
     ├── restart-waybar
     ├── wallpaper-cycle

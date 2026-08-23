@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""
+Razer keyboard fire effect — flames rise from the bottom of the keyboard
+with a dim dark red base. Uses the per-key matrix API via openrazer.
+"""
+
+import signal
+import sys
+import time
+import random
+import numpy as np
+import openrazer.client
+
+# ── Configuration ──
+FPS = 16
+COOLING = 85        # how quickly flames cool (higher = shorter flames)
+SPARKING = 160      # chance of new sparks at bottom (out of 255)
+BASE_COLOR = (20, 0, 0)  # dim dark red when no flame
+
+# Fire palette: dark red -> red -> deep orange -> orange (no white, yellow is the peak)
+PALETTE = []
+for i in range(256):
+    if i < 80:
+        # dark red to red (long red zone)
+        r = 20 + int(i * 2.0)
+        g = 0
+        b = 0
+    elif i < 160:
+        # red to deep orange
+        t = i - 80
+        r = min(206 + int(t * 0.6), 255)
+        g = int(t * 0.8)
+        b = 0
+    elif i < 220:
+        # deep orange to orange
+        t = i - 160
+        r = 255
+        g = 64 + int(t * 1.8)
+        b = 0
+    else:
+        # orange to yellow (peak — no white)
+        t = i - 220
+        r = 255
+        g = 172 + int(t * 2.3)
+        b = 0
+    PALETTE.append((min(r, 255), min(g, 255), min(b, 255)))
+
+
+def fire_effect(device):
+    rows = device.fx.advanced.rows
+    cols = device.fx.advanced.cols
+
+    # Heat map — taller than the keyboard for flame headroom
+    heat_rows = rows + 4
+    heat = np.zeros((heat_rows, cols), dtype=np.float64)
+
+    running = True
+
+    def stop(sig, frame):
+        nonlocal running
+        running = False
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+
+    while running:
+        # Step 1: Cool down every cell
+        cooling_map = np.random.randint(0, (COOLING * 10) // heat_rows + 1,
+                                        size=(heat_rows, cols))
+        heat = np.maximum(heat - cooling_map, 0)
+
+        # Step 2: Heat rises — drift upward with diffusion
+        new_heat = np.copy(heat)
+        for r in range(heat_rows - 1):
+            for c in range(cols):
+                # Pull heat from below with some spread
+                neighbors = [heat[r + 1][c]]
+                if c > 0:
+                    neighbors.append(heat[r + 1][c - 1])
+                if c < cols - 1:
+                    neighbors.append(heat[r + 1][c + 1])
+                if r + 2 < heat_rows:
+                    neighbors.append(heat[r + 2][c])
+                new_heat[r][c] = sum(neighbors) / len(neighbors)
+        heat = new_heat
+
+        # Step 3: Spark new flames at the bottom row
+        for c in range(cols):
+            if random.randint(0, 255) < SPARKING:
+                spark_row = heat_rows - 1 - random.randint(0, 1)
+                heat[spark_row][c] = min(heat[spark_row][c] + random.randint(160, 255), 255)
+
+        # Step 4: Map heat to colors and push to keyboard
+        # The visible keyboard rows map to the top of our heat array
+        for r in range(rows):
+            for c in range(cols):
+                # Map keyboard row to heat row (bottom of keyboard = bottom of heat)
+                heat_idx = (rows - 1 - r) + (heat_rows - rows)
+                heat_val = int(min(heat[heat_idx][c], 255))
+
+                if heat_val < 10:
+                    # Below flame threshold — show base color
+                    cr, cg, cb = BASE_COLOR
+                else:
+                    cr, cg, cb = PALETTE[heat_val]
+
+                device.fx.advanced.matrix[r, c] = (cr, cg, cb)
+
+        device.fx.advanced.draw()
+        time.sleep(1.0 / FPS)
+
+    # On exit, restore dim dark red static
+    device.fx.static(*BASE_COLOR)
+
+
+def main():
+    dm = openrazer.client.DeviceManager()
+    if not dm.devices:
+        print("No Razer devices found", file=sys.stderr)
+        sys.exit(1)
+
+    keyboard = None
+    for d in dm.devices:
+        if d.type == "keyboard":
+            keyboard = d
+            break
+
+    if keyboard is None:
+        print("No Razer keyboard found", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Fire effect on {keyboard.name} ({keyboard.fx.advanced.rows}x{keyboard.fx.advanced.cols})")
+    keyboard.brightness = 100
+    fire_effect(keyboard)
+
+
+if __name__ == "__main__":
+    main()

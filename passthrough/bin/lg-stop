@@ -1,0 +1,14 @@
+#!/bin/bash
+# Gracefully shut down the Windows VM
+echo "Shutting down Windows VM..."
+sudo virsh shutdown win10-lg
+echo "Waiting for shutdown (timeout 30s)..."
+for i in $(seq 1 30); do
+    if ! sudo virsh list --name | grep -q win10-lg; then
+        echo "VM stopped."
+        exit 0
+    fi
+    sleep 1
+done
+echo "VM didn't shut down gracefully. Force stopping..."
+sudo virsh destroy win10-lg
