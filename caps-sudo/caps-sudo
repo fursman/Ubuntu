@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# caps-sudo — CapsLock toggles passwordless sudo, with the physical CapsLock LED
+# as the "armed" danger light.
+#
+# Wiring (see install.sh): keyd runs, as root, on every CapsLock press:
+#     capslock = command(/usr/local/sbin/caps-sudo keypress)
+#
+# Behaviour:
+#   * disarmed + press  -> pop a terminal, require the user's password, then arm
+#   * armed    + press  -> disarm instantly (dropping a privilege needs no proof)
+#   * armed  == /etc/sudoers.d/90-caps-armed exists (NOPASSWD:ALL for the user)
+#   * LED lit  == armed
+#
+# The authentication asymmetry is intentional: arming demands a fresh password
+# (via `sudo -k` + a real sudo call), disarming never does.
+set -euo pipefail
+
+ARMED_FILE=/etc/sudoers.d/90-caps-armed
+HELPER=/usr/local/sbin/caps-sudo
+TARGET_USER=__TARGET_USER__          # substituted at install time (SUDO_USER)
+TAG=caps-sudo
+
+log(){ logger -t "$TAG" -- "$*" 2>/dev/null || true; }
+
+led_paths(){ ls /sys/class/leds/*capslock*/brightness 2>/dev/null || true; }
+led_on(){  for p in $(led_paths); do echo 1 >"$p" 2>/dev/null || true; done; }
+led_off(){ for p in $(led_paths); do echo 0 >"$p" 2>/dev/null || true; done; }
+
+is_armed(){ [ -f "$ARMED_FILE" ]; }
+
+# Environment needed to launch GUI/notifications inside the user's Wayland session.
+user_runtime(){ echo "/run/user/$(id -u "$TARGET_USER")"; }
+user_env(){
+  local rt; rt=$(user_runtime)
+  local wl; wl=$(ls "$rt" 2>/dev/null | grep -E '^wayland-[0-9]+$' | head -1)
+  printf 'XDG_RUNTIME_DIR=%s' "$rt"
+  [ -n "$wl" ] && printf ' WAYLAND_DISPLAY=%s' "$wl"
+}
+
+notify(){
+  # shellcheck disable=SC2046
+  sudo -u "$TARGET_USER" env $(user_env) \
+    notify-send -a caps-sudo -- "$1" "${2:-}" 2>/dev/null || true
+}
+
+# arm-commit runs as root, reached only through a fresh authenticated `sudo`.
+arm_commit(){
+  local tmp="$ARMED_FILE.tmp.$$"
+  cat >"$tmp" <<EOF
+# Managed by caps-sudo. Present = passwordless sudo is ARMED.
+# Delete this file (or tap CapsLock) to disarm.
+$TARGET_USER ALL=(ALL) NOPASSWD:ALL
+EOF
+  chmod 0440 "$tmp"
+  if visudo -cf "$tmp" >/dev/null 2>&1; then
+    mv "$tmp" "$ARMED_FILE"
+    led_on
+    notify "🔓 sudo ARMED" "Passwordless sudo is LIVE — tap CapsLock to disarm."
+    log "armed by $TARGET_USER"
+  else
+    rm -f "$tmp"
+    notify "caps-sudo: NOT armed" "sudoers validation failed."
+    log "arm aborted: visudo -cf failed"
+    exit 1
+  fi
+}
+
+disarm(){
+  rm -f "$ARMED_FILE"
+  led_off
+  notify "🔒 sudo disarmed" "Password-protected sudo restored."
+  log "disarmed"
+}
+
+# Entry point from keyd (root context, no user session attached).
+keypress(){
+  if is_armed; then
+    disarm
+  else
+    # Detach into the user's session and demand a password before arming.
+    # Inside kitty: `sudo -k` clears any cached grant, then the sudo call itself
+    # is the authentication; on success it runs arm-commit as root.
+    # shellcheck disable=SC2046
+    setsid sudo -u "$TARGET_USER" env $(user_env) \
+      kitty --class caps-sudo-auth --title "Arm passwordless sudo" -- \
+      bash -c 'echo "Authenticate to ARM passwordless sudo (Ctrl-C cancels):"; echo;
+               sudo -k;
+               if sudo '"$HELPER"' arm-commit; then :; else echo; echo "Cancelled — still disarmed."; sleep 1.5; fi' \
+      >/dev/null 2>&1 &
+  fi
+}
+
+case "${1:-}" in
+  keypress)   keypress ;;
+  arm-commit) arm_commit ;;
+  disarm)     disarm ;;
+  status)     is_armed && echo armed || echo disarmed ;;
+  *) echo "usage: caps-sudo {keypress|arm-commit|disarm|status}" >&2; exit 2 ;;
+esac

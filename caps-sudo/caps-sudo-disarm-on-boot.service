@@ -1,0 +1,12 @@
+[Unit]
+Description=Disarm caps-sudo passwordless sudo at boot (never let it survive a reboot)
+DefaultDependencies=no
+Before=sysinit.target
+ConditionPathExists=/usr/local/sbin/caps-sudo
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/caps-sudo disarm
+
+[Install]
+WantedBy=sysinit.target

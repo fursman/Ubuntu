@@ -5,12 +5,13 @@
 Transform a fresh Ubuntu **26.04 LTS** install into a fully configured, Dracula-themed
 Hyprland tiling compositor desktop with one command.
 
-Two scripts live here, deliberately separate:
+Three scripts live here, deliberately separate:
 
 | Script | Scope | Safe anywhere? |
 |---|---|---|
 | `setup.sh` | The desktop. Portable across machines. | Yes |
 | `gpu-passthrough.sh` | Single-GPU VFIO passthrough, Looking Glass, and a Windows VM. Razer Blade Pro 17 specific, changes boot config. | No -- read [docs/GPU-PASSTHROUGH.md](docs/GPU-PASSTHROUGH.md) first |
+| `caps-sudo/install.sh` | Makes CapsLock arm/disarm passwordless `sudo`, with the CapsLock LED as the "armed" light. Grants root without a password while armed. | No -- read [docs/CAPS-SUDO.md](docs/CAPS-SUDO.md) first |
 
 ## What's Included
 
@@ -36,6 +37,7 @@ Two scripts live here, deliberately separate:
 | Auth prompts | **hyprpolkitagent** -- polkit agent, so privilege prompts actually appear |
 | Snapshots | **Timeshift** -- rsync system snapshots for rollback |
 | Wireless display | **GNOME Network Displays** -- Miracast mirroring to a TV, see [docs/WIRELESS-DISPLAY.md](docs/WIRELESS-DISPLAY.md) |
+| CapsLock (optional) | **caps-sudo** -- CapsLock arms/disarms passwordless `sudo`, LED = danger light. Opt-in, not run by `setup.sh`, see [docs/CAPS-SUDO.md](docs/CAPS-SUDO.md) |
 
 ## Prerequisites
 
@@ -207,9 +209,15 @@ The status bar shows (left to right):
 .
 ├── setup.sh                       # Desktop setup (portable)
 ├── gpu-passthrough.sh             # VFIO + Looking Glass + Windows VM (Blade 17)
+├── caps-sudo/                     # Opt-in: CapsLock arms passwordless sudo (LED = danger light)
+│   ├── install.sh / uninstall.sh
+│   ├── caps-sudo                  # Root helper, run by keyd on each CapsLock press
+│   ├── keyd-default.conf          # Maps CapsLock -> helper
+│   └── caps-sudo-disarm-on-boot.service
 ├── docs/
 │   ├── GPU-PASSTHROUGH.md         # Why every passthrough knob exists
-│   └── WIRELESS-DISPLAY.md        # Miracast: the protocol and the 3 gotchas
+│   ├── WIRELESS-DISPLAY.md        # Miracast: the protocol and the 3 gotchas
+│   └── CAPS-SUDO.md               # CapsLock passwordless-sudo toggle, and its sharp edges
 ├── configs/
 │   ├── theme/dracula.css          # THE palette — every stylesheet imports this
 │   ├── hypr/hyprland.conf         # Compositor (sources env-local + polkit-local)
