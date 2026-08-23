@@ -70,6 +70,31 @@ if command -v waybar >/dev/null 2>&1; then
   echo ">> waybar detected: add the module from $DIR/indicator/waybar/ to your config"
 fi
 
+# 3d. report which authentication path this machine will actually use.
+#     We deliberately do NOT install a terminal emulator: polkit is the default
+#     path, so pulling one in on a normal desktop would be pure bloat. But if
+#     NEITHER path is available, CapsLock would silently do nothing -- which is
+#     the worst possible failure for a security toggle -- so say so loudly.
+if command -v pkexec >/dev/null 2>&1; then
+  echo ">> auth path: polkit (native dialog)"
+else
+  echo "!! pkexec not found -- falling back to a terminal prompt"
+fi
+FOUND_TERM=""
+for t in kitty alacritty foot ptyxis gnome-terminal konsole xterm; do
+  if command -v "$t" >/dev/null 2>&1; then FOUND_TERM="$t"; break; fi
+done
+if [ -n "$FOUND_TERM" ]; then
+  echo ">> terminal fallback available: $FOUND_TERM"
+elif command -v pkexec >/dev/null 2>&1; then
+  echo "!! no known terminal installed; CAPS_SUDO_AUTH=terminal would have"
+  echo "   nothing to open. Fine unless your session lacks a polkit agent."
+else
+  echo "!! NO usable authentication method: no pkexec and no known terminal."
+  echo "   Tapping CapsLock will do nothing. Install a polkit agent or a"
+  echo "   terminal (e.g. apt install kitty) before relying on this."
+fi
+
 # 4. boot-time safety disarm (armed state never survives a reboot)
 install -m 0644 "$DIR/caps-sudo-disarm-on-boot.service" /etc/systemd/system/
 systemctl daemon-reload

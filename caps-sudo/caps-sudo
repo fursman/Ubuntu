@@ -150,14 +150,45 @@ polkit_auth(){
 
 # Fallback for sessions with no polkit agent (bare WMs): pop a terminal and let
 # sudo itself do the authenticating.
+#
+# Do not hardcode one terminal. The upstream version assumed kitty, which is
+# present on this repo's Hyprland target but not on a stock Ubuntu GNOME box --
+# and because the spawn is backgrounded with output discarded, a missing kitty
+# meant CapsLock silently did nothing at all. Their argv shapes differ enough
+# that "$term -e" is not portable, so each one we support is spelled out.
+TERMINALS="kitty alacritty foot ptyxis gnome-terminal konsole xterm"
+
+find_terminal(){
+  local t
+  for t in $TERMINALS; do
+    command -v "$t" >/dev/null 2>&1 && { echo "$t"; return 0; }
+  done
+  return 1
+}
+
 terminal_auth(){
+  local term title cmd
+  title="Arm passwordless sudo"
+  if ! term=$(find_terminal); then
+    log "no polkit agent and no known terminal: cannot prompt"
+    notify "caps-sudo: cannot prompt" "No polkit agent, and no known terminal is installed."
+    return 1
+  fi
+  cmd='echo "Authenticate to ARM passwordless sudo (Ctrl-C cancels):"; echo;
+       sudo -k;
+       if sudo '"$HELPER"' arm-commit; then :; else echo; echo "Cancelled — still disarmed."; sleep 1.5; fi'
+  case "$term" in
+    kitty)          set -- kitty --class caps-sudo-auth --title "$title" -- bash -c "$cmd" ;;
+    alacritty)      set -- alacritty --class caps-sudo-auth --title "$title" -e bash -c "$cmd" ;;
+    foot)           set -- foot --app-id=caps-sudo-auth --title="$title" bash -c "$cmd" ;;
+    ptyxis)         set -- ptyxis --new-window -- bash -c "$cmd" ;;
+    gnome-terminal) set -- gnome-terminal --title="$title" -- bash -c "$cmd" ;;
+    konsole)        set -- konsole -e bash -c "$cmd" ;;
+    xterm)          set -- xterm -T "$title" -e bash -c "$cmd" ;;
+  esac
+  log "terminal fallback via $term"
   # shellcheck disable=SC2046
-  setsid sudo -u "$TARGET_USER" env $(user_env) \
-    kitty --class caps-sudo-auth --title "Arm passwordless sudo" -- \
-    bash -c 'echo "Authenticate to ARM passwordless sudo (Ctrl-C cancels):"; echo;
-             sudo -k;
-             if sudo '"$HELPER"' arm-commit; then :; else echo; echo "Cancelled — still disarmed."; sleep 1.5; fi' \
-    >/dev/null 2>&1 &
+  setsid sudo -u "$TARGET_USER" env $(user_env) "$@" >/dev/null 2>&1 &
 }
 
 use_polkit(){

@@ -68,8 +68,17 @@ signal whether or not you are looking at the keyboard.
 ## If your session has no polkit agent
 
 Bare window managers may not run one. Set `CAPS_SUDO_AUTH=terminal` and
-caps-sudo falls back to the original behaviour: a kitty window where `sudo`
-itself does the asking.
+caps-sudo falls back to the original behaviour: a terminal where `sudo` itself
+does the asking.
+
+It uses the first of these it finds, so you are not required to install kitty
+on a machine that does not already have it:
+
+`kitty`, `alacritty`, `foot`, `ptyxis`, `gnome-terminal`, `konsole`, `xterm`
+
+`install.sh` prints which authentication path your machine will actually use,
+and warns loudly if *neither* is available -- a CapsLock tap that silently does
+nothing is the worst possible failure mode for a security toggle.
 
 ## Does your CapsLock LED actually work?
 
