@@ -4,7 +4,15 @@
     "height": 30,
     "modules-left": ["custom/voice", "hyprland/workspaces", "wlr/taskbar"],
     "modules-center": ["hyprland/window"],
-    "modules-right": ["tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "clock#date", "clock#time", "custom/media", "custom/notification"],
+    "modules-right": ["custom/caps-sudo", "tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "clock#date", "clock#time", "custom/media", "custom/notification"],
+
+    "custom/caps-sudo": {
+        "exec": "/usr/local/sbin/caps-sudo waybar",
+        "return-type": "json",
+        "format": "󰌾 {}",
+        "tooltip": true,
+        "on-click": "sudo -n /usr/local/sbin/caps-sudo disarm"
+    },
 
     "custom/media": {
         "exec": "playerctl metadata --format '{\"text\": \"{{artist}} — {{title}}\", \"tooltip\": \"{{playerName}}: {{artist}} — {{title}}\", \"alt\": \"{{status}}\", \"class\": \"{{status}}\"}' --follow 2>/dev/null",
