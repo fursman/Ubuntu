@@ -1,0 +1,38 @@
+#!/bin/bash
+# Launch GNOME Network Displays for Miracast mirroring, after checking the two
+# things that silently prevent it from ever connecting.
+#
+# See docs/WIRELESS-DISPLAY.md for the full story.
+
+set -uo pipefail
+
+APP=org.gnome.NetworkDisplays
+
+if ! flatpak info "$APP" >/dev/null 2>&1; then
+    notify-send -u critical "Wireless display" "GNOME Network Displays is not installed.
+Run: flatpak install flathub $APP"
+    exit 1
+fi
+
+# Miracast is inbound: GND is the RTSP *server* and the TV dials in to 7236.
+# GND only knows how to open ports via firewalld, so on a ufw box it will fail
+# silently with the ports shut.
+if command -v ufw >/dev/null 2>&1 && sudo -n ufw status 2>/dev/null | grep -q '^Status: active'; then
+    if ! sudo -n ufw status 2>/dev/null | grep -q '7236'; then
+        notify-send -u critical "Wireless display" \
+            "ufw is active but port 7236 is not open.
+The TV connects IN to this laptop, so it will never appear.
+Run: sudo ufw allow 7236/tcp && sudo ufw allow 7236/udp"
+        exit 1
+    fi
+fi
+
+# Wi-Fi must be up: the P2P group is formed on the same radio.
+if ! nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^wifi:connected'; then
+    notify-send "Wireless display" "Wi-Fi is not connected — Wi-Fi Direct needs the radio up."
+fi
+
+notify-send "Wireless display" "Pick the entry WITHOUT the model suffix — that one is Miracast.
+Answer the screen-share prompt when it appears."
+
+exec flatpak run "$APP" "$@"

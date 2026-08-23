@@ -103,7 +103,10 @@ if apt-cache show hyprpolkitagent >/dev/null 2>&1; then
     apt_need hyprpolkitagent
     POLKIT_AGENT="/usr/libexec/hyprpolkitagent"
 else
-    apt_need polkitd-pkla lxpolkit || true
+    # hyprpolkitagent comes from the PPA. Without it, fall back to lxpolkit —
+    # a single binary at a predictable path, unlike mate-polkit whose agent
+    # lives under a multiarch libdir.
+    apt_need lxpolkit
     POLKIT_AGENT="/usr/bin/lxpolkit"
 fi
 
@@ -113,7 +116,8 @@ apt_need thunar thunar-volman tumbler pavucontrol \
          gnome-keyring seahorse network-manager-gnome blueman \
          btop fastfetch mpv imagemagick ffmpeg \
          papirus-icon-theme fonts-jetbrains-mono fonts-font-awesome \
-         git git-lfs gh curl wget flatpak timeshift
+         git git-lfs gh curl wget flatpak timeshift \
+         python3-pyatspi
 
 # -- Toolchain (also covers building awww) --
 apt_need build-essential pkg-config meson ninja-build cmake \
@@ -150,6 +154,19 @@ else
     # Prefer the DISTRO-SIGNED prebuilt modules over DKMS. They survive
     # Secure Boot, and they do not need rebuilding on every kernel bump —
     # which is what silently breaks a DKMS setup after an unattended upgrade.
+    #
+    # We take the `-open` flavour, which is what ubuntu-drivers steers every
+    # supported GPU to from driver 560 onward. One caveat worth knowing:
+    # NVIDIA's open modules only implement Run Time D3 power gating on
+    # Ampere and newer. On a pre-Ampere laptop `-open` therefore costs you
+    # dGPU power-down and battery life, and the proprietary flavour (same
+    # number, no `-open` suffix) is the better choice.
+    if lspci -nn | grep -qiE 'NVIDIA.*\[10de:1[e-f][0-9a-f]{2}\]'; then
+        warn "Pre-Ampere (Turing) GPU detected."
+        warn "The -open driver has no RTD3 power gating below Ampere; consider"
+        warn "installing the proprietary flavour instead (no -open suffix)."
+    fi
+
     NV_VER=$(ubuntu-drivers devices 2>/dev/null \
              | awk '/recommended/ {print $3}' | grep -oP 'nvidia-driver-\K[0-9]+' | head -1)
     if [ -z "$NV_VER" ]; then
@@ -254,11 +271,11 @@ done
 
 # The shared palette. GTK CSS has no ~ expansion and no search path, so every
 # stylesheet that says `@import "palette.css"` needs a copy next to it.
-for d in waybar swaync wlogout gtklock; do
+for d in swaync wlogout gtklock; do
     mkdir -p "$HOME/.config/$d"
     cp "$SCRIPT_DIR/configs/theme/dracula.css" "$HOME/.config/$d/palette.css"
 done
-info "-> palette.css deployed to waybar, swaync, wlogout, gtklock"
+info "-> palette.css deployed to swaync, wlogout, gtklock"
 
 mkdir -p "$HOME/.local/share/rofi/themes"
 cp "$SCRIPT_DIR/configs/rofi/spotlight-dark.rasi" "$HOME/.local/share/rofi/themes/spotlight-dark.rasi"
@@ -401,6 +418,30 @@ rm -rf "$ASSETS_DIR"
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 flatpak install -y --noninteractive flathub org.gnome.World.PikaBackup 2>/dev/null \
     || warn "Pika Backup install skipped"
+flatpak install -y --noninteractive flathub org.gnome.NetworkDisplays 2>/dev/null \
+    || warn "GNOME Network Displays install skipped"
+
+# -- Wireless display (Miracast) firewall --
+# Counterintuitive but load-bearing: GNOME Network Displays runs the RTSP
+# SERVER and the TV connects IN to port 7236. A default-deny-incoming firewall
+# therefore kills mirroring with no useful error.
+#
+# GND can only auto-open ports through firewalld, which is not installed here;
+# it logs "Firewalld does not seem to be installed" and carries on as though
+# the ports were open. So the rules have to be added by hand.
+# See docs/WIRELESS-DISPLAY.md.
+if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q '^Status: active'; then
+    if sudo ufw status | grep -q '7236'; then
+        info "Miracast firewall rules already present"
+    else
+        sudo ufw allow 7236/tcp comment 'Miracast RTSP (gnome-network-displays)' >/dev/null
+        sudo ufw allow 7236/udp comment 'Miracast RTSP/UDP'                      >/dev/null
+        sudo ufw allow 5353/udp comment 'mDNS discovery'                         >/dev/null
+        success "Miracast firewall rules added (7236/tcp, 7236/udp, 5353/udp)"
+    fi
+else
+    info "ufw not active — no Miracast firewall rules needed"
+fi
 
 # -- GTK settings --
 gsettings set org.gnome.desktop.interface gtk-theme     'Dracula'     2>/dev/null || true

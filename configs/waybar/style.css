@@ -1,217 +1,127 @@
-@import "palette.css";
-
-/* ==========================================================================
- * Waybar — Dracula
- *
- * Layout rules that keep the bar coherent:
- *   - one radius (10px) for every pill
- *   - one vertical margin (5px) for every pill, so the bar height is uniform
- *   - accents carry MEANING: a module is coloured by what it reports on, and
- *     goes @orange/@red only when it wants attention
- *
- * Sizes assume a 3840x2160 panel at scale 1.0 (~257 DPI) — this laptop runs
- * unscaled, so type is specified large on purpose. If you ever set a monitor
- * scale in hyprland.conf, divide every px value here by that scale.
- * ========================================================================== */
-
 * {
     border: none;
     border-radius: 0;
+    font-family: Inter Light, JetBrainsMono Nerd Font Mono;
     min-height: 0;
-    /* Nerd Font last so glyphs resolve after the text face has had its say. */
-    font-family: "Cantarell", "Noto Sans", "JetBrainsMono Nerd Font", sans-serif;
-    font-feature-settings: "tnum";   /* stop clocks/percentages jittering */
 }
-
 window#waybar {
-    background-color: @surface;
-    color: @fg;
-    font-size: 19px;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding-top: 5px;
+    color: #FFFFFF;
+    font-size: 40px;
+    font-family: Cantarell, Noto Sans, sans-serif, JetBrainsMono Nerd Font Mono;
     transition-property: background-color;
-    transition-duration: 0.4s;
+    transition-duration: .5s;
 }
 
 window#waybar.hidden { opacity: 0.2; }
 
-/* -- Workspaces ----------------------------------------------------------- */
-#workspaces {
-    padding: 0 4px;
+@keyframes blink-warning {
+    70% { color: white; }
+    to { color: white; background-color: orange; }
 }
-
-#workspaces button {
-    padding: 0 12px;
-    margin: 5px 3px;
-    border-radius: 10px;
-    font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
-    font-size: 26px;
-    font-weight: 600;
-    color: @comment;
-    background: transparent;
-    transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-#workspaces button:hover {
-    color: @fg;
-    background: @surface-hover;
-}
-
-/* Occupied but not focused: readable, not shouting. */
-#workspaces button.visible {
-    color: @fg;
-    background: @surface-hover;
-}
-
-/* The focused workspace is the one place the accent goes solid. */
-#workspaces button.active,
-#workspaces button.focused {
-    color: @bg;
-    background: @purple;
-}
-
-#workspaces button.urgent {
-    color: @bg;
-    background: @red;
-}
-
-/* -- Taskbar -------------------------------------------------------------- */
-#taskbar {
-    padding: 0 4px;
-}
-
-#taskbar button {
-    padding: 0 8px;
-    margin: 5px 3px;
-    border-radius: 10px;
-    background: transparent;
-}
-
-#taskbar button:hover  { background: @surface-hover; }
-#taskbar button.active { background: @surface-hover; }
-
-/* -- Window title --------------------------------------------------------- */
-#window {
-    color: @fg;
-    font-weight: 500;
-    font-size: 19px;
-    padding: 0 14px;
-}
-
-window#waybar.empty #window { background: transparent; }
-
-/* -- Module pills --------------------------------------------------------- */
-#tray,
-#network,
-#bluetooth,
-#disk,
-#memory,
-#cpu,
-#temperature,
-#pulseaudio,
-#backlight,
-#battery,
-#clock,
-#custom-media,
-#custom-notification,
-#custom-voice {
-    padding: 0 14px;
-    margin: 5px 2px;
-    border-radius: 10px;
-    font-size: 19px;
-    font-weight: 600;
-    background-color: transparent;
-    color: @fg;
-    transition: background-color 0.2s ease;
-}
-
-#tray:hover,
-#network:hover,
-#bluetooth:hover,
-#disk:hover,
-#memory:hover,
-#cpu:hover,
-#temperature:hover,
-#pulseaudio:hover,
-#backlight:hover,
-#battery:hover,
-#clock:hover { background-color: @surface-hover; }
-
-/* Accent by domain — connectivity cyan, storage/compute purple-ish,
-   power green, light yellow. Each colour appears in exactly one group. */
-#network      { color: @cyan;   }
-#bluetooth    { color: @cyan;   }
-#disk         { color: @orange; }
-#memory       { color: @purple; }
-#cpu          { color: @purple; }
-#temperature  { color: @pink;   }
-#pulseaudio   { color: @cyan;   }
-#backlight    { color: @yellow; }
-#battery      { color: @green;  }
-#clock        { color: @fg; font-weight: 700; }
-
-#tray { padding: 0 10px; }
-#tray > .passive { -gtk-icon-effect: dim; }
-#tray > .needs-attention { -gtk-icon-effect: highlight; }
-
-/* -- Attention states ----------------------------------------------------- *
- * Warning = orange, critical = red, everywhere. Only genuinely urgent,
- * genuinely-losing-your-work states blink.
- * ------------------------------------------------------------------------ */
-#cpu.warning,
-#memory.warning,
-#temperature.warning,
-#battery.warning { color: @orange; }
-
-#cpu.critical,
-#memory.critical,
-#temperature.critical,
-#battery.critical { color: @red; }
 
 @keyframes blink-critical {
-    to { color: @bg; background-color: @red; }
+    70% { color: white; }
+    to { color: white; background-color: red; }
 }
 
-/* Only while actually draining — a critical battery on the charger is fine. */
-#battery.critical.discharging {
-    animation: blink-critical 1.2s steps(12) infinite alternate;
+#taskbar { padding: 0px 5px 0px 5px; font-weight: normal; font-style: normal; }
+
+#workspaces button {
+    padding-left: 15px;
+    padding-right: 5px;
+    font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
+    font-size: 30px;
+    background-color: transparent;
+    color: #666666;
+    font-weight: 600;
+    border-top: 4px solid transparent;
+    border-bottom: 3px solid transparent;
 }
 
-/* -- Media ---------------------------------------------------------------- */
-#custom-media          { color: @comment; }
-#custom-media.Playing  { color: @green;   }
-#custom-media.Paused   { color: @comment; }
-
-/* -- Notifications -------------------------------------------------------- */
-#custom-notification { color: @fg; padding: 0 16px; }
-
-@keyframes bell-flash {
-    to { color: @yellow; }
+#workspaces button.visible { background: #000000; color: #FFFFFF; }
+#workspaces button:hover {
+    color: #FFFFFF;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 3px solid #a678d3;
 }
-#custom-notification.notification {
-    animation: bell-flash 1s ease-in-out infinite alternate;
+#workspaces button.focused {
+    background: #FFFFFF;
+    border-top: 3px solid #9730fd;
+    border-bottom: 3px solid #9730fd;
+    color: #9730fd;
 }
+#workspaces button.current_output.focused { color: #FFFFFF; background: #000000; }
+#workspaces button.urgent { background-color: #FF0000; color: #000000; }
 
-/* -- Voice assistant ------------------------------------------------------ *
- * Four states, four colours, each pulsing at a rate that matches how much
- * the machine wants your attention: idle slow, speaking fast.
- * ------------------------------------------------------------------------ */
-#custom-voice { padding: 0 16px; font-size: 20px; }
-
-#custom-voice.off       { color: @comment; }
-#custom-voice.ready     { color: @green;  animation: pulse        1.5s ease-in-out infinite alternate; }
-#custom-voice.listening { color: @cyan;   animation: pulse-listen 600ms ease-in-out infinite alternate; }
-#custom-voice.thinking  { color: @purple; animation: pulse-think  800ms ease-in-out infinite alternate; }
-#custom-voice.speaking  { color: @pink;   animation: pulse-speak  400ms ease-in-out infinite alternate; }
-
-@keyframes pulse        { from { opacity: 0.6; } to { opacity: 1.0; } }
-@keyframes pulse-listen { from { opacity: 0.45; text-shadow: 0 0 4px @cyan;   } to { opacity: 1.0; text-shadow: 0 0 12px @cyan;   } }
-@keyframes pulse-think  { from { opacity: 0.50; text-shadow: 0 0 4px @purple; } to { opacity: 1.0; text-shadow: 0 0 10px @purple; } }
-@keyframes pulse-speak  { from { opacity: 0.50; text-shadow: 0 0 4px @pink;   } to { opacity: 1.0; text-shadow: 0 0 14px @pink;   } }
-
-/* -- Tooltips ------------------------------------------------------------- */
-tooltip {
-    background: @surface-solid;
-    border: 1px solid @border-soft;
-    border-radius: 10px;
+/* Module colors */
+#network, #bluetooth, #disk, #memory, #cpu, #temperature, #pulseaudio, #backlight, #battery, #clock, #date, #window, #tray, #custom-media, #custom-notification {
+    color: #FFFFFF;
+    font-size: 20px;
+    padding: 2px 10px;
+    margin: 2px 2px;
+    background-color: transparent;
+    font-weight: 600;
+    border-radius: 6px;
+    border-top: 4px solid transparent;
+    border-bottom: 3px solid transparent;
 }
 
-tooltip label { color: @fg; padding: 2px; }
+#network     { color: #ffffff; }  /* white */
+#bluetooth   { color: #c4f0fa; }  /* cyan */
+#disk        { color: #fae0c4; }  /* orange */
+#memory      { color: #c4fad4; }  /* green */
+#cpu         { color: #d0c4fa; }  /* lavender */
+#temperature { color: #fac4c4; }  /* red-white */
+#pulseaudio  { color: #c4f0fa; }  /* cyan */
+#backlight   { color: #faf0c4; }  /* yellow */
+#battery     { color: #c4fad4; }  /* green */
+#clock       { color: #ffffff; }  /* white */
+#window      { color: #FFFFFF; min-width: 100px; }
+#clock       { font-weight: bold; }
+
+/* Animations for battery/memory warnings */
+#battery.warning { color: orange; }
+#battery.critical { color: red; }
+#battery.warning.discharging { animation-name: blink-warning; animation-duration: 3s; }
+#battery.critical.discharging { animation-name: blink-critical; animation-duration: 2s; }
+#cpu.warning { color: orange; }
+#cpu.critical { color: red; }
+#memory.warning { color: orange; }
+#memory.critical { color: red; animation-name: blink-critical; animation-duration: 2s; }
+
+/* Voice assistant */
+#custom-voice { padding: 0 14px 0 16px; font-size: 18px; }
+#custom-voice.off { color: #6272a4; }
+#custom-voice.ready { animation: pulse 1.5s ease-in-out infinite alternate; color: #50fa7b; }
+#custom-voice.listening { animation: pulse-listen 600ms ease-in-out infinite alternate; color: #33ccff; }
+#custom-voice.thinking { animation: pulse-think 800ms ease-in-out infinite alternate; color: #bd93f9; }
+#custom-voice.speaking { animation: pulse-speak 400ms ease-in-out infinite alternate; color: #ff5555; }
+
+@keyframes pulse {
+    from { opacity: 0.6; }
+    to { opacity: 1.0; }
+}
+@keyframes pulse-listen {
+    from { opacity: 0.4; text-shadow: 0 0 4px #33ccff; }
+    to { opacity: 1.0; text-shadow: 0 0 12px #33ccff; }
+}
+@keyframes pulse-think {
+    from { opacity: 0.5; text-shadow: 0 0 4px #bd93f9; }
+    to { opacity: 1.0; text-shadow: 0 0 10px #bd93f9; }
+}
+@keyframes pulse-speak {
+    from { opacity: 0.5; text-shadow: 0 0 4px #ff5555; }
+    to { opacity: 1.0; text-shadow: 0 0 14px #ff5555; }
+}
+
+/* Media player */
+#custom-media { color: #bd93f9; padding: 0 8px; }
+#custom-media.Playing { color: #50fa7b; }
+#custom-media.Paused { color: #6272a4; }
+
+/* Notification center */
+#custom-notification { padding: 0 16px 0 8px; color: #f8f8f2; }
+#custom-notification.notification { animation: bell-flash 1s ease-in-out infinite alternate; }
+@keyframes bell-flash { from { color: #f8f8f2; } to { color: #f1fa8c; } }

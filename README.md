@@ -35,6 +35,7 @@ Two scripts live here, deliberately separate:
 | Annotation | **swappy** -- mark up a region grab without leaving the keyboard |
 | Auth prompts | **hyprpolkitagent** -- polkit agent, so privilege prompts actually appear |
 | Snapshots | **Timeshift** -- rsync system snapshots for rollback |
+| Wireless display | **GNOME Network Displays** -- Miracast mirroring to a TV, see [docs/WIRELESS-DISPLAY.md](docs/WIRELESS-DISPLAY.md) |
 
 ## Prerequisites
 
@@ -174,6 +175,9 @@ Press **Super + Space** to see all keybinds in a searchable Rofi menu.
 | `Super + L` | Lock Screen |
 | `Super + X` | Logout Menu |
 
+Also on `PATH`: `wireless-display` (Miracast mirroring), `wallpaper-cycle`,
+`restart-waybar`, `hypr-cheatsheet`.
+
 ### Media & Hardware Keys
 
 | Key | Action |
@@ -204,7 +208,8 @@ The status bar shows (left to right):
 ├── setup.sh                       # Desktop setup (portable)
 ├── gpu-passthrough.sh             # VFIO + Looking Glass + Windows VM (Blade 17)
 ├── docs/
-│   └── GPU-PASSTHROUGH.md         # Why every passthrough knob exists
+│   ├── GPU-PASSTHROUGH.md         # Why every passthrough knob exists
+│   └── WIRELESS-DISPLAY.md        # Miracast: the protocol and the 3 gotchas
 ├── configs/
 │   ├── theme/dracula.css          # THE palette — every stylesheet imports this
 │   ├── hypr/hyprland.conf         # Compositor (sources env-local + polkit-local)
@@ -228,6 +233,7 @@ The status bar shows (left to right):
 │   └── assets/                    # vBIOS lives here, gitignored
 └── scripts/                       # Installed to ~/.local/bin
     ├── lock-screen
+    ├── wireless-display
     ├── hypr-cheatsheet
     ├── restart-waybar
     ├── wallpaper-cycle
