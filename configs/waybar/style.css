@@ -132,6 +132,7 @@ window#waybar.hidden { opacity: 0.2; }
     margin: 4px 4px;
     padding: 0 12px;
     border-radius: 99px;
+    font-size: 20px;
 }
 #custom-caps-sudo.armed {
     background-color: #e01b24;
@@ -140,6 +141,6 @@ window#waybar.hidden { opacity: 0.2; }
 }
 #custom-caps-sudo.disarmed {
     background-color: transparent;
-    color: #6272a4;
+    color: #ffffff;
     padding: 0 8px;
 }
