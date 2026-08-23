@@ -99,13 +99,17 @@ apt_need hyprland waybar kitty rofi wlogout gtklock \
 # Without one, anything that needs authentication (mounting a disk in Thunar,
 # GParted, virt-manager) fails silently with no prompt. Stock GNOME ships an
 # agent; a bare Hyprland session does not.
-if apt-cache show hyprpolkitagent >/dev/null 2>&1; then
+# Preferred: mate-polkit. It is the maintained fork of polkit-gnome's GTK
+# dialog (polkit-gnome 0.105 itself segfaults on 26.04), and it draws a far
+# nicer prompt than hyprpolkitagent's Qt one. On 26.04 its agent sits at a
+# predictable /usr/libexec path.
+if apt-cache show mate-polkit >/dev/null 2>&1; then
+    apt_need mate-polkit
+    POLKIT_AGENT="/usr/libexec/polkit-mate-authentication-agent-1"
+elif apt-cache show hyprpolkitagent >/dev/null 2>&1; then
     apt_need hyprpolkitagent
     POLKIT_AGENT="/usr/libexec/hyprpolkitagent"
 else
-    # hyprpolkitagent comes from the PPA. Without it, fall back to lxpolkit —
-    # a single binary at a predictable path, unlike mate-polkit whose agent
-    # lives under a multiarch libdir.
     apt_need lxpolkit
     POLKIT_AGENT="/usr/bin/lxpolkit"
 fi
@@ -342,6 +346,29 @@ for script in "$SCRIPT_DIR"/scripts/*; do
     info "-> ~/.local/bin/$(basename "$script")"
 done
 
+# Razer per-key RGB: a calm warm-white backlight, and the CapsLock key turns
+# red while caps-sudo has passwordless sudo armed. Wired here rather than in
+# the Razer step because the unit runs ~/.local/bin/keyboard-ambient, which
+# only exists after the install loop above.
+#
+# keyboard-fire is the same repo's flame effect. Only one process may own the
+# key matrix, so the two units Conflict=; ambient is the default because it is
+# readable at night without the motion. `systemctl --user enable --now
+# keyboard-fire` brings the flames back.
+AMBIENT_UNIT="$SCRIPT_DIR/caps-sudo/indicator/razer/keyboard-ambient.service"
+if [ "$CONFIGS_ONLY" = 0 ] && [ -f "$AMBIENT_UNIT" ] && \
+   { lsusb 2>/dev/null | grep -qi 'Razer' || sudo dmidecode -s system-manufacturer 2>/dev/null | grep -qi razer; }; then
+    mkdir -p "$HOME/.config/systemd/user"
+    install -m 0644 "$AMBIENT_UNIT" "$HOME/.config/systemd/user/keyboard-ambient.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user disable --now keyboard-fire.service 2>/dev/null || true
+    if systemctl --user enable --now keyboard-ambient.service 2>/dev/null; then
+        info "-> keyboard-ambient.service (CapsLock lights red while sudo is armed)"
+    else
+        warn "Could not start keyboard-ambient.service (is openrazer-daemon running?)"
+    fi
+fi
+
 # Record which polkit agent to launch, so hyprland.conf can stay generic.
 mkdir -p "$HOME/.config/hypr"
 if [ -n "${POLKIT_AGENT:-}" ] && [ -x "${POLKIT_AGENT:-}" ]; then
@@ -361,6 +388,18 @@ if [ "$CONFIGS_ONLY" = 0 ]; then
     # some Wayland metapackages and will fight it for the bus name.
     systemctl --user mask mako.service 2>/dev/null \
         && info "Masked mako.service (swaync is the notification daemon)" || true
+
+    # Same problem one layer up: hyprpolkitagent ships an ENABLED user unit and
+    # would grab org.freedesktop.PolicyKit1.AuthenticationAgent before
+    # polkit-local.conf's exec-once runs, so the Qt prompt would win the race
+    # even though mate-polkit is the configured agent. Only mask it when
+    # mate-polkit is the one we actually picked.
+    case "${POLKIT_AGENT:-}" in
+        *polkit-mate-authentication-agent-1)
+            systemctl --user mask hyprpolkitagent.service 2>/dev/null \
+                && info "Masked hyprpolkitagent.service (mate-polkit is the agent)" || true
+            ;;
+    esac
     systemctl --user daemon-reload 2>/dev/null || true
 fi
 success "Helper scripts installed"

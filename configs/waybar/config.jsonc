@@ -7,7 +7,9 @@
     "modules-right": ["custom/caps-sudo", "tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "clock#date", "clock#time", "custom/media", "custom/notification"],
 
     "custom/caps-sudo": {
-        "exec": "/usr/local/sbin/caps-sudo waybar",
+        // Silently inert unless caps-sudo is installed (it is opt-in, see
+        // caps-sudo/install.sh), so this config stays portable.
+        "exec": "command -v /usr/local/sbin/caps-sudo >/dev/null && exec /usr/local/sbin/caps-sudo waybar || sleep infinity",
         "return-type": "json",
         "format": "{}",
         "tooltip": true,
