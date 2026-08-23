@@ -80,6 +80,26 @@ on a machine that does not already have it:
 and warns loudly if *neither* is available -- a CapsLock tap that silently does
 nothing is the worst possible failure mode for a security toggle.
 
+## Razer keyboards: light the CapsLock *key*, not the LED
+
+On the Hyprland/Blade target the HID CapsLock LED is a dead end: keyd owns it
+and forces it off continuously (a re-assert loop reads back 0 even
+immediately after every write). But the keyboard is per-key RGB via openrazer,
+which keyd knows nothing about -- so `scripts/keyboard-ambient` paints a calm
+warm-white backlight and turns the **CapsLock key itself max red** while armed.
+It replaces `keyboard-fire` (only one process may own the key matrix; the unit
+declares `Conflicts=` on it):
+
+```
+install -m 0644 caps-sudo/indicator/razer/keyboard-ambient.service ~/.config/systemd/user/
+systemctl --user disable --now keyboard-fire.service
+systemctl --user enable --now keyboard-ambient.service
+```
+
+The keyboard's global dimmer stays at 100 so the red key can hit full
+brightness; the calm look comes from the ambient colour being low. If your
+CapsLock is not at matrix (3,1), set `KEYBOARD_CAPS_POS=row,col` in the unit.
+
 ## Does your CapsLock LED actually work?
 
 ```

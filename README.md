@@ -243,6 +243,7 @@ The status bar shows (left to right):
     ├── lock-screen
     ├── wireless-display
     ├── keyboard-fire            # Razer per-key RGB flame effect (openrazer)
+    ├── keyboard-ambient         # Calm warm-white backlight + red CapsLock key while caps-sudo is armed
     ├── hypr-cheatsheet
     ├── restart-waybar
     ├── wallpaper-cycle

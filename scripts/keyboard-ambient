@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""
+Razer keyboard ambient light — a calm, professional backlight that makes the
+keys readable at night without the motion of the fire effect, plus the
+caps-sudo danger light: the CapsLock KEY itself turns red while passwordless
+sudo is armed.
+
+Why the CapsLock key and not the CapsLock LED: keyd owns the HID caps LED and
+forces it off continuously, so it can never show the armed state. The per-key
+RGB matrix is driven by openrazer, which keyd knows nothing about -- so the
+key under your finger is the one light we fully control.
+
+Armed state is read the same unprivileged way the waybar module does:
+/etc/sudoers.d is world-listable, so testing whether the armed file EXISTS
+needs no privilege, and its root-only contents are never read.
+"""
+
+import os
+import signal
+import sys
+import time
+
+import openrazer.client
+
+sys.stdout.reconfigure(line_buffering=True)   # journal sees lines as they happen
+
+# ── Configuration ──
+# The keyboard's global dimmer stays at 100 so the armed key can hit full
+# brightness; the calm ambient is achieved by keeping the colour itself low.
+# (Dimming globally would dim the red danger key too.)
+BRIGHTNESS = 100
+AMBIENT = (40, 29, 18)             # warm, low white: readable legends, no glare
+ARMED_KEY_COLOR = (255, 0, 0)      # CapsLock at MAX red while sudo is armed
+ARMED_FILE = "/etc/sudoers.d/90-caps-armed"
+POLL_S = 0.5
+
+# Matrix position of the CapsLock key (row, col). Razer Blade 17 Pro (Early
+# 2021) is a 6x16 matrix; override with KEYBOARD_CAPS_POS="row,col" if your
+# layout differs (find it by lighting candidates -- see docs/CAPS-SUDO.md).
+_pos = os.environ.get("KEYBOARD_CAPS_POS", "3,1")
+CAPS_POS = tuple(int(x) for x in _pos.split(","))
+
+
+def is_armed():
+    return os.path.exists(ARMED_FILE)
+
+
+def paint(kb, armed):
+    rows, cols = kb.fx.advanced.rows, kb.fx.advanced.cols
+    for r in range(rows):
+        for c in range(cols):
+            kb.fx.advanced.matrix[r, c] = AMBIENT
+    if armed:
+        kb.fx.advanced.matrix[CAPS_POS] = ARMED_KEY_COLOR
+    kb.fx.advanced.draw()
+
+
+def main():
+    dm = openrazer.client.DeviceManager()
+    kb = next((d for d in dm.devices if d.type == "keyboard"), None)
+    if kb is None:
+        print("No Razer keyboard found", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Ambient light on {kb.name} "
+          f"({kb.fx.advanced.rows}x{kb.fx.advanced.cols}), caps key at {CAPS_POS}")
+    kb.brightness = BRIGHTNESS
+
+    running = True
+
+    def stop(sig, frame):
+        nonlocal running
+        running = False
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+
+    last = None
+    while running:
+        armed = is_armed()
+        if armed != last:          # static: only redraw on a state change
+            paint(kb, armed)
+            last = armed
+        time.sleep(POLL_S)
+
+    # Leave the calm ambient on when we exit; never leave a stale red key.
+    paint(kb, False)
+
+
+if __name__ == "__main__":
+    main()

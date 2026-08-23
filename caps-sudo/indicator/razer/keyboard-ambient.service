@@ -1,0 +1,17 @@
+[Unit]
+Description=Razer keyboard ambient light + caps-sudo armed key
+After=openrazer-daemon.service
+Requires=openrazer-daemon.service
+# Replaces keyboard-fire.service: only one process may own the key matrix.
+Conflicts=keyboard-fire.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/keyboard-ambient
+# Uncomment to move the red key if your CapsLock sits elsewhere in the matrix:
+# Environment=KEYBOARD_CAPS_POS=3,1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
