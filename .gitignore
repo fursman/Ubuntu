@@ -1,0 +1,9 @@
+# Proprietary firmware blobs — machine-local, never redistributed.
+# See passthrough/assets/README.md for how to re-dump.
+passthrough/assets/*.rom
+passthrough/assets/*.bin
+
+# Build scratch
+*.tmp
+*.bak
+*.orig

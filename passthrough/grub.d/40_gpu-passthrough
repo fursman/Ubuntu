@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+# Find the latest kernel
+KERNEL=$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -1 | sed 's|/boot/vmlinuz-||')
+if [ -z "$KERNEL" ]; then
+    exit 0
+fi
+
+# Get boot device UUID
+BOOT_DEV=$(df /boot | tail -1 | awk '{print $1}')
+BOOT_UUID=$(blkid -s UUID -o value "$BOOT_DEV" 2>/dev/null)
+
+cat << EOF
+menuentry 'Ubuntu (GPU Passthrough)' --class ubuntu --class gnu-linux --class gnu --class os {
+    recordfail
+    load_video
+    gfxmode \$linux_gfx_mode
+    insmod gzio
+    insmod part_gpt
+    insmod lvm
+    search --no-floppy --fs-uuid --set=root ${BOOT_UUID}
+    linux /vmlinuz-${KERNEL} root=/dev/mapper/ubuntu--vg-ubuntu--lv ro quiet splash mem_sleep_default=deep loglevel=0 rd.udev.log_level=0 intel_iommu=on vfio-pci.ids=10de:249c,10de:228b
+    initrd /initrd.img-${KERNEL}
+}
+EOF

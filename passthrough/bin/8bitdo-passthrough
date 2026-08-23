@@ -1,0 +1,33 @@
+#!/bin/bash
+# Auto-attach 8BitDo USB devices to win10-lg VM via libvirt
+# Called by udev — libvirt handles AppArmor/cgroup permissions properly
+exec >> /tmp/8bitdo-passthrough.log 2>&1
+echo "$(date): Device: $DEVPATH"
+
+virsh list --name 2>/dev/null | grep -q win10-lg || exit 0
+
+BUSNUM=$(cat "/sys/$DEVPATH/busnum" 2>/dev/null)
+DEVNUM=$(cat "/sys/$DEVPATH/devnum" 2>/dev/null)
+[ -z "$BUSNUM" -o -z "$DEVNUM" ] && exit 0
+
+# Unbind host drivers first
+for iface in /sys/$DEVPATH/${DEVPATH##*/}:*; do
+    [ -L "$iface/driver" ] && echo "$(basename $iface)" > "$(readlink -f $iface/driver)/unbind" 2>/dev/null
+done
+
+# Detach any existing USB hostdevs from VM (stale from previous enumerations)
+for old in $(virsh dumpxml win10-lg 2>/dev/null | grep -oP "hostdev.*type='usb'" -A5 | grep -oP "device='\K[0-9]+"); do
+    [ "$old" != "$DEVNUM" ] && virsh detach-device win10-lg /dev/stdin --live 2>/dev/null <<EOF
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source><address bus='${BUSNUM}' device='${old}'/></source>
+</hostdev>
+EOF
+done
+
+echo "$(date): Attaching bus=$BUSNUM device=$DEVNUM"
+virsh attach-device win10-lg /dev/stdin --live <<EOF
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source><address bus='${BUSNUM}' device='${DEVNUM}'/></source>
+</hostdev>
+EOF
+echo "$(date): Result: $?"

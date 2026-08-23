@@ -1,0 +1,4 @@
+# 8BitDo Ultimate Wireless — auto-passthrough to Windows VM
+SUBSYSTEM=="usb", ACTION=="add", ATTR{idVendor}=="2dc8", ATTR{idProduct}=="3109", RUN+="/usr/local/bin/8bitdo-passthrough"
+SUBSYSTEM=="usb", ACTION=="add", ATTR{idVendor}=="2dc8", ATTR{idProduct}=="3106", RUN+="/usr/local/bin/8bitdo-passthrough"
+SUBSYSTEM=="usb", ACTION=="add", ATTR{idVendor}=="057e", ATTR{idProduct}=="2009", ATTRS{serial}=="000000000001", RUN+="/usr/local/bin/8bitdo-passthrough"

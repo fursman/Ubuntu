@@ -1,0 +1,2 @@
+# Disable USB controller wakeup to prevent phantom wake from suspend
+SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{class}=="0x0c0330", ATTR{power/wakeup}="disabled"
