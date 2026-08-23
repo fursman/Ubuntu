@@ -1,4 +1,6 @@
-/* Dracula-themed gtklock */
+@import "palette.css";
+
+/* gtklock — lock screen. Colours from the shared Dracula palette. */
 window {
     background-size: cover;
     background-position: center;
@@ -7,22 +9,22 @@ window {
 #clock-label {
     font-size: 96px;
     font-weight: bold;
-    color: #f8f8f2;
+    color: @fg;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
     margin-bottom: 16px;
 }
 
 #date-label {
     font-size: 28px;
-    color: #bd93f9;
+    color: @purple;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
     margin-bottom: 48px;
 }
 
 #input-field {
-    background-color: rgba(40, 42, 54, 0.8);
-    color: #f8f8f2;
-    border: 2px solid #bd93f9;
+    background-color: alpha(@bg, 0.8);
+    color: @fg;
+    border: 2px solid @purple;
     border-radius: 12px;
     font-size: 18px;
     padding: 12px 24px;
@@ -30,12 +32,12 @@ window {
 }
 
 #input-field:focus {
-    border-color: #50fa7b;
-    box-shadow: 0 0 8px rgba(80, 250, 123, 0.3);
+    border-color: @green;
+    box-shadow: 0 0 8px alpha(@green, 0.3);
 }
 
 #message-label {
-    color: #ff5555;
+    color: @red;
     font-size: 16px;
     margin-top: 8px;
 }

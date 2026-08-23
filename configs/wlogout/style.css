@@ -1,25 +1,49 @@
+@import "palette.css";
+
+/* wlogout — session menu. Colours from the shared Dracula palette.
+ *
+ * Icon paths are absolute because GTK CSS cannot expand ~; setup.sh rewrites
+ * the /HOME_DIR placeholder at deploy time. */
+
 * {
     background-image: none;
-}
-window {
-    background-color: rgba(12, 12, 12, 0.9);
-}
-button {
-    color: #FFFFFF;
-    background-color: #1E1E30;
-    border-style: solid;
-    border-width: 5px;
-    margin: 10px;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 45%;
+    /* Kill the focus outline so the button border is the only focus signal. */
+    outline-style: none;
 }
 
-button:focus, button:active, button:hover {
-    background-color: #000000;
-    border-width: 5px;
-    border-color: #47AFC4;
-    outline-style: none;
+window {
+    background-color: alpha(@bg-alt, 0.92);
+}
+
+button {
+    color: @fg;
+    background-color: alpha(@current, 0.55);
+    border-style: solid;
+    border-width: 3px;
+    border-color: @border-soft;
+    border-radius: 16px;
+    margin: 12px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 42%;
+    transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:hover,
+button:focus {
+    background-color: alpha(@purple, 0.22);
+    border-color: @purple;
+    background-size: 46%;
+}
+
+/* Destructive actions warm up on hover so shutdown and reboot never look
+   like the same gesture as lock. */
+#shutdown:hover, #shutdown:focus { background-color: alpha(@red, 0.22);    border-color: @red;    }
+#reboot:hover,   #reboot:focus   { background-color: alpha(@orange, 0.22); border-color: @orange; }
+#logout:hover,   #logout:focus   { background-color: alpha(@yellow, 0.22); border-color: @yellow; }
+
+button:active {
+    background-color: alpha(@purple, 0.35);
 }
 
 #lock {
