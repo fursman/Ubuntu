@@ -216,9 +216,9 @@ waybar_stream(){
     is_armed && cur=armed || cur=disarmed
     if [ "$cur" != "$last" ]; then
       if [ "$cur" = armed ]; then
-        printf '{"text":"sudo armed","class":"armed","tooltip":"Passwordless sudo is LIVE - tap CapsLock to disarm."}\n'
+        printf '{"text":" sudo armed","class":"armed","tooltip":"Passwordless sudo is LIVE - tap CapsLock to disarm."}\n'
       else
-        printf '{"text":"","class":"disarmed","tooltip":""}\n'
+        printf '{"text":"\U000f033e","class":"disarmed","tooltip":"sudo is password-protected - tap CapsLock to arm."}\n'
       fi
       last="$cur"
     fi

@@ -9,7 +9,7 @@
     "custom/caps-sudo": {
         "exec": "/usr/local/sbin/caps-sudo waybar",
         "return-type": "json",
-        "format": "󰌾 {}",
+        "format": "{}",
         "tooltip": true,
         "on-click": "sudo -n /usr/local/sbin/caps-sudo disarm"
     },

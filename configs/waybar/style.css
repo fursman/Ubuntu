@@ -126,18 +126,20 @@ window#waybar.hidden { opacity: 0.2; }
 #custom-notification.notification { animation: bell-flash 1s ease-in-out infinite alternate; }
 @keyframes bell-flash { from { color: #f8f8f2; } to { color: #f1fa8c; } }
 
-/* caps-sudo armed indicator: a red pill you cannot miss (mirrors GNOME's
-   screen-recording indicator). Hidden entirely when disarmed. */
+/* caps-sudo indicator: a calm lock when disarmed, a red !-in-triangle pill
+   when armed (mirrors GNOME's screen-recording indicator). */
 #custom-caps-sudo {
+    margin: 4px 4px;
+    padding: 0 12px;
+    border-radius: 99px;
+}
+#custom-caps-sudo.armed {
     background-color: #e01b24;
     color: #ffffff;
     font-weight: bold;
-    padding: 0 10px;
-    margin: 4px 4px;
-    border-radius: 99px;
 }
 #custom-caps-sudo.disarmed {
     background-color: transparent;
-    padding: 0;
-    margin: 0;
+    color: #6272a4;
+    padding: 0 8px;
 }
