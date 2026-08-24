@@ -374,7 +374,9 @@ fi
 # project itself is a separate repo (it carries its own venv and a ~300MB ONNX
 # model) and is deliberately NOT vendored here -- clone it to ~/voice-assistant
 # and this step picks it up. Absent, we skip silently.
-VOICE_UNIT="$SCRIPT_DIR/configs/systemd/voice-assistant.service"
+# The unit ships WITH that project, not here — keeping a second copy in this
+# repo just means the two drift, and the stale one wins whenever setup.sh runs.
+VOICE_UNIT="$HOME/voice-assistant/voice-assistant.service"
 if [ "$CONFIGS_ONLY" = 0 ] && [ -f "$VOICE_UNIT" ] && [ -x "$HOME/.local/bin/voice-assistant" ]; then
     mkdir -p "$HOME/.config/systemd/user"
     install -m 0644 "$VOICE_UNIT" "$HOME/.config/systemd/user/voice-assistant.service"
