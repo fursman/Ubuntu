@@ -369,6 +369,25 @@ if [ "$CONFIGS_ONLY" = 0 ] && [ -f "$AMBIENT_UNIT" ] && \
     fi
 fi
 
+# Voice assistant. The waybar config ships a custom/voice module, so without
+# this unit that module renders permanently empty on a fresh install. The
+# project itself is a separate repo (it carries its own venv and a ~300MB ONNX
+# model) and is deliberately NOT vendored here -- clone it to ~/voice-assistant
+# and this step picks it up. Absent, we skip silently.
+VOICE_UNIT="$SCRIPT_DIR/configs/systemd/voice-assistant.service"
+if [ "$CONFIGS_ONLY" = 0 ] && [ -f "$VOICE_UNIT" ] && [ -x "$HOME/.local/bin/voice-assistant" ]; then
+    mkdir -p "$HOME/.config/systemd/user"
+    install -m 0644 "$VOICE_UNIT" "$HOME/.config/systemd/user/voice-assistant.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+    if systemctl --user enable --now voice-assistant.service 2>/dev/null; then
+        info "-> voice-assistant.service"
+    else
+        warn "Could not start voice-assistant.service (check: journalctl --user -u voice-assistant)"
+    fi
+elif [ -f "$VOICE_UNIT" ] && [ ! -x "$HOME/.local/bin/voice-assistant" ]; then
+    info "voice-assistant not installed — skipping its unit (waybar's voice module stays idle)"
+fi
+
 # Record which polkit agent to launch, so hyprland.conf can stay generic.
 mkdir -p "$HOME/.config/hypr"
 if [ -n "${POLKIT_AGENT:-}" ] && [ -x "${POLKIT_AGENT:-}" ]; then

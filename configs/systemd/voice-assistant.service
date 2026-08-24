@@ -1,0 +1,22 @@
+[Unit]
+Description=Hyprland Voice Assistant (Claude Code)
+After=pipewire.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/voice-assistant
+Restart=on-failure
+RestartSec=5
+Environment="PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=%h/voice-assistant/.venv/lib/python3.13/site-packages"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+WorkingDirectory=%h/voice-assistant
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voice-assistant
+
+[Install]
+WantedBy=default.target
