@@ -176,9 +176,18 @@
     },
 
     "temperature": {
-        "critical-threshold": 80,
+        // Read the CPU package sensor explicitly. With no path set, waybar
+        // falls back to the first thermal zone -- on this machine that is
+        // acpitz, a chassis sensor that reads ~27C while the CPU package is
+        // at 100C and thermally throttling. hwmon-path-abs + input-filename
+        // is used rather than a plain hwmon-path because the hwmonN index is
+        // not stable across boots; the platform path is.
+        "hwmon-path-abs": "/sys/devices/platform/coretemp.0/hwmon",
+        "input-filename": "temp1_input",
+        "critical-threshold": 95,
         "interval": 5,
         "format": "󰔏 {temperatureC}°C",
+        "format-critical": "󰸁 {temperatureC}°C",
         "tooltip": true
     }
 }]
