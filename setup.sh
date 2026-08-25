@@ -390,6 +390,19 @@ elif [ -f "$VOICE_UNIT" ] && [ ! -x "$HOME/.local/bin/voice-assistant" ]; then
     info "voice-assistant not installed — skipping its unit (waybar's voice module stays idle)"
 fi
 
+# AppArmor parser concurrency cap. apparmor_parser defaults to -j nproc, and the
+# 5.0.x parser shipped with 26.04 corrupts its heap above ~12 parallel jobs: the
+# workers SIGABRT and the parent then blocks forever on dead children, at 0% CPU.
+# On a 32-thread machine this hung the release upgrade's apparmor.postinst for
+# 82 minutes and cascaded into a half-configured system. Cap it before it can
+# ever run. Harmless on small machines; jobs=8 parses the full profile set in
+# ~2s on a 64-thread box. Ubuntu bug worth filing; this is the workaround.
+if ! grep -qE '^jobs=' /etc/apparmor/parser.conf 2>/dev/null; then
+    sudo mkdir -p /etc/apparmor
+    echo 'jobs=8' | sudo tee -a /etc/apparmor/parser.conf >/dev/null
+    info "Capped apparmor_parser to 8 jobs (parallel-parse hang on many-core CPUs)"
+fi
+
 # Record which polkit agent to launch, so hyprland.conf can stay generic.
 mkdir -p "$HOME/.config/hypr"
 if [ -n "${POLKIT_AGENT:-}" ] && [ -x "${POLKIT_AGENT:-}" ]; then

@@ -12,6 +12,7 @@ Three scripts live here, deliberately separate:
 | `setup.sh` | The desktop. Portable across machines. | Yes |
 | `gpu-passthrough.sh` | Single-GPU VFIO passthrough, Looking Glass, and a Windows VM. Razer Blade Pro 17 specific, changes boot config. | No -- read [docs/GPU-PASSTHROUGH.md](docs/GPU-PASSTHROUGH.md) first |
 | `caps-sudo/install.sh` | Makes CapsLock arm/disarm passwordless `sudo`, with the CapsLock LED as the "armed" light. Grants root without a password while armed. | No -- read [docs/CAPS-SUDO.md](docs/CAPS-SUDO.md) first |
+| `llm-serve/install.sh` | Serves Qwen3.8-27B on one 24GB NVIDIA GPU: builds llama.cpp with CUDA, downloads ~17.6GB, runs an OpenAI-compatible API + web UI on :8081. | Needs an NVIDIA GPU; API is unauthenticated by default -- read [llm-serve/README.md](llm-serve/README.md) |
 
 ## What's Included
 
@@ -229,7 +230,12 @@ The status bar shows (left to right):
 │   ├── wlogout/{layout,style.css}
 │   ├── gtklock/style.css
 │   └── gtk-{3.0,4.0}/settings.ini
+├── llm-serve/                     # Opt-in: Qwen3.8-27B on one 24GB GPU (llama.cpp + MTP)
+│   ├── install.sh                 # CUDA build (all present GPU archs), model download, unit
+│   ├── qwen38.service             # Measured flags; why 192K ctx, q4 KV, draft-n-max 2
+│   └── README.md                  # Why not vLLM on Ada, the numbers, the gotchas
 ├── passthrough/                   # Verbatim artifacts from the live host
+│   ├── hosts/block/               # Desktop variant (i9 + 4090): no laptop hacks, pinned kernel
 │   ├── grub.d/40_gpu-passthrough  # Generates the second boot entry
 │   ├── modprobe.d/{vfio,kvmfr}.conf
 │   ├── modules-load.d/kvmfr.conf

@@ -1,0 +1,43 @@
+#!/bin/bash
+set -e
+
+# Block (desktop, i9-13900K + UHD 770 + RTX 4090): second boot entry that hands
+# the RTX 4090 to a VM instead of the host.
+#
+# Normal entry  -> nvidia driver binds 01:00.0, host gets CUDA + rendering.
+# This entry    -> vfio-pci binds it, for a Windows guest + Looking Glass.
+# Either way the desktop runs on the Intel UHD 770 (00:02.0, i915), so this
+# can never blank the console.
+#
+# Differences from the Blade 17 reference script in ../../grub.d/, and why:
+#   * no fake-battery ACPI SSDT     -- laptop-only Code 43 workaround
+#   * no vBIOS ROM file             -- the 4090 is never POSTed as primary, so
+#                                      its ROM is clean; QEMU reads it directly
+#   * no SMBIOS spoofing            -- Razer OEM-licence laundering, irrelevant
+#   * insmod ext2, not lvm          -- /boot here is plain ext4 on its own
+#                                      partition, outside the LUKS volume
+#   * KERNEL is PINNED              -- "newest kernel" autodetection would have
+#                                      picked one that RCU-stalled on this box
+KERNEL=7.0.0-30-generic
+BOOT_UUID=1463ddd9-0a71-417e-b802-723beb105af9
+ROOT=/dev/mapper/ubuntu--vg-ubuntu--lv
+
+# Emit nothing rather than an unbootable entry if that kernel goes away.
+[ -e "/boot/vmlinuz-${KERNEL}" ] || exit 0
+[ -e "/boot/initrd.img-${KERNEL}" ] || exit 0
+
+cat << EOF
+menuentry 'Ubuntu (GPU Passthrough - RTX 4090 to VM)' --class ubuntu --class gnu-linux --class gnu --class os \$menuentry_id_option 'gnulinux-gpu-passthrough' {
+	recordfail
+	load_video
+	gfxmode \$linux_gfx_mode
+	insmod gzio
+	insmod part_gpt
+	insmod ext2
+	search --no-floppy --fs-uuid --set=root ${BOOT_UUID}
+	echo	'Loading Linux ${KERNEL} (GPU passthrough) ...'
+	linux	/vmlinuz-${KERNEL} root=${ROOT} ro quiet splash pcie_aspm=off nvme_core.default_ps_max_latency_us=0 intel_iommu=on iommu=pt vfio-pci.ids=10de:2684,10de:22ba
+	echo	'Loading initial ramdisk ...'
+	initrd	/initrd.img-${KERNEL}
+}
+EOF

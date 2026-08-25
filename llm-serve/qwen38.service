@@ -1,0 +1,41 @@
+[Unit]
+Description=Qwen3.8-27B on one 24GB GPU (llama.cpp + MTP speculative decoding)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Pin the server to ONE GPU. Multi-GPU boxes: pick the card you want (nvidia-smi
+# index); llama.cpp will otherwise spread layers across every visible device.
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=LLAMA_ARG_HOST=0.0.0.0
+Environment=LLAMA_ARG_PORT=8081
+WorkingDirectory=%h/llama.cpp
+# Flags, and why (measured on an RTX 4090, see README.md):
+#   -c 196608                   the largest context that still fits WITH the MTP
+#                               draft context on 24GB. 262144 (native) does not.
+#   -fa on                      flash attention; MTP does not pay off without it
+#   --cache-type-k/v q4_0       q4 KV cost NOTHING measurable here (recall and
+#                               decode identical to q8_0) and buys 50% more context
+#   --spec-type draft-mtp       use the MTP draft head baked into the GGUF
+#   --spec-draft-n-max 2        sweet spot on 24GB Ada cards (+46-60% decode)
+#   --parallel 1                spec decode is single-stream; >1 erases the gain
+#   --jinja                     proper chat template -> tool calling + reasoning
+#   --reasoning-format auto     surface <think> as reasoning_content, OpenAI-style
+#
+# Optional agent mode (file + shell tools driven from the web UI). Only with a
+# key and pinned CORS -- the tools run unsandboxed as your user:
+#   --agent --api-key-file %h/.config/qwen38/api-key \
+#   --cors-origins http://<this-host>:8081,http://localhost:8081
+ExecStart=%h/llama.cpp/build/bin/llama-server \
+  -m %h/models/unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf \
+  -ngl 999 -c 196608 -fa on \
+  --cache-type-k q4_0 --cache-type-v q4_0 \
+  --spec-type draft-mtp --spec-draft-n-max 2 \
+  --parallel 1 --jinja --reasoning-format auto \
+  --alias qwen3.8-27b
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
