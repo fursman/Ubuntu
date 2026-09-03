@@ -193,8 +193,14 @@ else
         warn "installing the proprietary flavour instead (no -open suffix)."
     fi
 
+    # `|| true` because this pipeline ends in `head -1`: head exits after the
+    # first line, grep takes SIGPIPE, and under `set -o pipefail` the
+    # substitution reports 141 -- which `set -e` turns into an abort of the
+    # whole script, on a line that actually succeeded. Same trap as the
+    # detection helper above, and it is a race, so it fails on some machines
+    # and not others. The empty-result path below is the real fallback.
     NV_VER=$(ubuntu-drivers devices 2>/dev/null \
-             | awk '/recommended/ {print $3}' | grep -oP 'nvidia-driver-\K[0-9]+' | head -1)
+             | awk '/recommended/ {print $3}' | grep -oP 'nvidia-driver-\K[0-9]+' | head -1 || true)
     if [ -z "$NV_VER" ]; then
         NV_VER=$(apt-cache search --names-only '^nvidia-driver-[0-9]+-open$' \
                  | grep -oP 'nvidia-driver-\K[0-9]+' | sort -n | tail -1)
