@@ -203,11 +203,32 @@ else
     # Ampere and newer. On a pre-Ampere laptop `-open` therefore costs you
     # dGPU power-down and battery life, and the proprietary flavour (same
     # number, no `-open` suffix) is the better choice.
-    if out_matches 'NVIDIA.*\[10de:1[e-f][0-9a-f]{2}\]' lspci -nn; then
-        warn "Pre-Ampere (Turing) GPU detected."
-        warn "The -open driver has no RTD3 power gating below Ampere; consider"
-        warn "installing the proprietary flavour instead (no -open suffix)."
-    fi
+    # Which flavour: `-open` or proprietary. This is a per-SYSTEM choice, not a
+    # per-card one, so one unsupported GPU decides it for the whole machine.
+    #
+    # The open modules need a GPU System Processor, which exists only on Turing
+    # and newer. A Volta card is not merely slower under `-open`, it is GONE:
+    #   NVRM: The NVIDIA GPU 0000:42:00.0 (PCI ID: 10de:1d81) installed in this
+    #   NVRM: system is not supported by open nvidia.ko because it does not
+    #   NVRM: include the required GPU System Processor (GSP).
+    # That is a real machine here: installing `-open` silently took a Titan V
+    # off the bus while leaving its RTX 4090 working, so nothing looked broken.
+    #
+    # Turing device ids start at 0x1e00, so anything below that predates GSP.
+    # The old check only warned, and only matched 0x1e/0x1f -- which is Turing
+    # itself, the first generation that DOES work.
+    NV_FLAVOUR="-open"
+    NV_IDS="$(lspci -nn 2>/dev/null | grep -iE 'vga|3d controller' \
+              | grep -oiP '10de:\K[0-9a-f]{4}' || true)"
+    for nv_id in $NV_IDS; do
+        if [ "$((16#$nv_id))" -lt "$((16#1e00))" ]; then
+            NV_FLAVOUR=""
+            warn "Pre-Turing NVIDIA GPU present (10de:$nv_id) — it has no GSP, so"
+            warn "the open modules cannot drive it at all. Using the proprietary"
+            warn "driver for this machine so every card stays visible."
+            break
+        fi
+    done
 
     # `|| true` because this pipeline ends in `head -1`: head exits after the
     # first line, grep takes SIGPIPE, and under `set -o pipefail` the
@@ -227,14 +248,14 @@ else
     elif nvidia-smi &>/dev/null && [ "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | cut -d. -f1)" = "$NV_VER" ]; then
         info "nvidia-driver-$NV_VER already active"
     else
-        info "Installing nvidia-driver-$NV_VER-open (signed prebuilt modules)"
-        HWE=$(apt-cache search --names-only "^linux-modules-nvidia-$NV_VER-open-generic-hwe-" \
+        info "Installing nvidia-driver-$NV_VER$NV_FLAVOUR (signed prebuilt modules)"
+        HWE=$(apt-cache search --names-only "^linux-modules-nvidia-$NV_VER$NV_FLAVOUR-generic-hwe-" \
               | awk '{print $1}' | sort -V | tail -1)
-        apt_need "nvidia-driver-$NV_VER-open" ${HWE:+"$HWE"}
+        apt_need "nvidia-driver-$NV_VER$NV_FLAVOUR" ${HWE:+"$HWE"}
         # Pin them manual: if the metapackage is only ever pulled in as a
         # dependency, a later `apt autoremove` will quietly rip the driver out.
-        sudo apt-mark manual "nvidia-driver-$NV_VER-open" ${HWE:+"$HWE"} >/dev/null
-        success "nvidia-driver-$NV_VER-open installed and pinned"
+        sudo apt-mark manual "nvidia-driver-$NV_VER$NV_FLAVOUR" ${HWE:+"$HWE"} >/dev/null
+        success "nvidia-driver-$NV_VER$NV_FLAVOUR installed and pinned"
     fi
 
     # DRM modeset is mandatory for Wayland on NVIDIA; fbdev gives a working
