@@ -98,6 +98,22 @@ step "1/10 - Repositories"
 # The archive carries Hyprland, but a release or two behind. The PPA tracks
 # upstream, which matters because the config in this repo uses syntax
 # (windowrule v2 `match:`, the `gesture =` form) that older builds reject.
+# Drop PPA entries left pointing at a PREVIOUS release. do-release-upgrade
+# rewrites the archive sources but leaves a third-party .sources file naming
+# the old codename, and that series no longer resolves -- so Hyprland is simply
+# not available at upgrade time and the upgrade REMOVES it. That is not
+# hypothetical: a 25.10 -> 26.04 upgrade here dropped hyprland outright because
+# its PPA still said `questing`, which would have booted the machine to a
+# display manager with no compositor behind it.
+for stale in /etc/apt/sources.list.d/cppiber-ubuntu-hyprland-*.sources; do
+    [ -e "$stale" ] || continue
+    case "$stale" in
+        *"-$CODENAME.sources") ;;
+        *) sudo rm -f "$stale"
+           warn "Removed stale Hyprland PPA entry: $(basename "$stale")" ;;
+    esac
+done
+
 if [ -f "/etc/apt/sources.list.d/cppiber-ubuntu-hyprland-$CODENAME.sources" ]; then
     info "Hyprland PPA already configured for $CODENAME"
 elif sudo add-apt-repository -y ppa:cppiber/hyprland 2>/dev/null; then
