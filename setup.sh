@@ -570,11 +570,24 @@ fi
 rm -rf "$ASSETS_DIR"
 
 # -- Flatpak --
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-flatpak install -y --noninteractive flathub org.gnome.World.PikaBackup 2>/dev/null \
-    || warn "Pika Backup install skipped"
-flatpak install -y --noninteractive flathub org.gnome.NetworkDisplays 2>/dev/null \
-    || warn "GNOME Network Displays install skipped"
+# Every one of these reads stdin from /dev/null, and that is the whole point.
+# Flatpak's system-scope operations authenticate through polkit, and with no
+# graphical agent running the text agent prompts on the terminal and waits
+# forever. `|| true` does not save you: the command never returns to fail. A
+# scripted run of this script sat at "Authentication is required to configure
+# software repositories" for SEVEN HOURS, having already finished every other
+# step. Closing stdin turns that hang into an immediate, visible failure.
+if sudo -n flatpak remote-add --if-not-exists flathub \
+        https://dl.flathub.org/repo/flathub.flatpakrepo </dev/null 2>/dev/null; then
+    for app in org.gnome.World.PikaBackup org.gnome.NetworkDisplays; do
+        sudo -n flatpak install -y --noninteractive flathub "$app" </dev/null 2>/dev/null \
+            || warn "$app install skipped"
+    done
+else
+    warn "Flathub remote not added — skipping Pika Backup and Network Displays"
+    warn "Add it later with: sudo flatpak remote-add --if-not-exists flathub \\"
+    warn "  https://dl.flathub.org/repo/flathub.flatpakrepo"
+fi
 
 # -- Wireless display (Miracast) firewall --
 # Counterintuitive but load-bearing: GNOME Network Displays runs the RTSP
