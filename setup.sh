@@ -445,6 +445,29 @@ POLKIT_FOUND=""
 for agent in "${POLKIT_CANDIDATES[@]}"; do
     [ -n "$agent" ] && [ -x "$agent" ] && { POLKIT_FOUND="$agent"; break; }
 done
+# Machine-local overrides, sourced LAST by hyprland.conf so they win. Created
+# once and never rewritten -- unlike env-local.conf, whose contents this script
+# derives from the hardware, this one holds things only a human knows. A config
+# redeploy that silently reverted such a fix is what motivated it.
+HYPR_LOCAL="$HOME/.config/hypr/local.conf"
+if [ -f "$HYPR_LOCAL" ]; then
+    info "-> ~/.config/hypr/local.conf (kept, not overwritten)"
+else
+    cat > "$HYPR_LOCAL" <<'LOCALEOF'
+# Machine-local Hyprland overrides. Sourced last, so anything here beats the
+# shared config. setup.sh creates this file once and never overwrites it.
+#
+# Example -- needed when the display hangs off one of several GPUs, where
+# hardware cursor planes fail with "Backend requires blit, but cursor blit
+# failed" and the screen appears to freeze:
+#
+# cursor {
+#     no_hardware_cursors = true
+# }
+LOCALEOF
+    info "-> ~/.config/hypr/local.conf (created)"
+fi
+
 if [ -n "$POLKIT_FOUND" ]; then
     echo "exec-once = $POLKIT_FOUND" > "$HOME/.config/hypr/polkit-local.conf"
     info "Polkit agent: $POLKIT_FOUND"
