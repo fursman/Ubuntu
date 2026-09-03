@@ -426,13 +426,28 @@ if ! grep -qE '^jobs=' /etc/apparmor/parser.conf 2>/dev/null; then
 fi
 
 # Record which polkit agent to launch, so hyprland.conf can stay generic.
+#
+# POLKIT_AGENT is only set by the package step, which --configs-only skips, so
+# the fallback list below has to be able to find an agent on its own. It has to
+# include mate-polkit for that reason: it is the PREFERRED agent, installed
+# above, and leaving it out of this list meant a redeploy on a machine that
+# already had it wrote an empty file and warned that no agent existed. Order
+# matches the install preference.
 mkdir -p "$HOME/.config/hypr"
-if [ -n "${POLKIT_AGENT:-}" ] && [ -x "${POLKIT_AGENT:-}" ]; then
-    echo "exec-once = $POLKIT_AGENT" > "$HOME/.config/hypr/polkit-local.conf"
-elif [ -x /usr/libexec/hyprpolkitagent ]; then
-    echo "exec-once = /usr/libexec/hyprpolkitagent" > "$HOME/.config/hypr/polkit-local.conf"
-elif [ -x /usr/bin/lxpolkit ]; then
-    echo "exec-once = /usr/bin/lxpolkit" > "$HOME/.config/hypr/polkit-local.conf"
+POLKIT_CANDIDATES=(
+    "${POLKIT_AGENT:-}"
+    /usr/libexec/polkit-mate-authentication-agent-1
+    /usr/lib/mate-polkit/polkit-mate-authentication-agent-1
+    /usr/libexec/hyprpolkitagent
+    /usr/bin/lxpolkit
+)
+POLKIT_FOUND=""
+for agent in "${POLKIT_CANDIDATES[@]}"; do
+    [ -n "$agent" ] && [ -x "$agent" ] && { POLKIT_FOUND="$agent"; break; }
+done
+if [ -n "$POLKIT_FOUND" ]; then
+    echo "exec-once = $POLKIT_FOUND" > "$HOME/.config/hypr/polkit-local.conf"
+    info "Polkit agent: $POLKIT_FOUND"
 else
     : > "$HOME/.config/hypr/polkit-local.conf"
     warn "No polkit agent found — authentication prompts will not appear"
