@@ -46,6 +46,28 @@ echo -e "${NC}"
 echo -e "${BOLD}  Stock Ubuntu -> Hyprland Desktop${NC}"
 echo -e "  Detected: Ubuntu $RELEASE ($CODENAME)\n"
 
+# Does a command's output match a pattern? Use this instead of `cmd | grep -q`.
+#
+# Under `set -o pipefail` that pipeline is a trap. grep -q exits at the FIRST
+# match, the still-running producer takes SIGPIPE, and the pipeline reports 141
+# -- so a successful match reads as a failed test. It bites the slow hardware
+# enumerators specifically (lspci, lsusb, dmidecode, udevadm, ufw): they are
+# still walking the bus when grep has already found what it wanted.
+#
+# Worse than a clean break, it is a race, so the same line works on one machine
+# and silently skips its step on another. That is exactly how a box with two
+# NVIDIA cards ended up with no NVIDIA env vars in its Hyprland config, and how
+# `elif ! lspci | grep -qi nvidia` could decide an NVIDIA machine had no GPU and
+# skip the driver install entirely.
+#
+# Capturing the output first means no pipe, so nothing can be signalled.
+out_matches() {
+    local pattern="$1"; shift
+    local output
+    output="$("$@" 2>/dev/null || true)"
+    grep -qiE -- "$pattern" <<<"$output"
+}
+
 # apt-get, not apt: stable CLI, no "unstable interface" warnings in scripts.
 APT_GET=(sudo DEBIAN_FRONTEND=noninteractive apt-get -y
          -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
@@ -141,7 +163,7 @@ fi
 step "3/10 - Razer hardware support"
 # This repo's reference machine is a Razer Blade. openrazer drives the
 # per-key RGB and fan control; harmless to skip elsewhere.
-if lsusb 2>/dev/null | grep -qi 'Razer' || sudo dmidecode -s system-manufacturer 2>/dev/null | grep -qi razer; then
+if out_matches 'Razer' lsusb || out_matches razer sudo dmidecode -s system-manufacturer; then
     apt_need openrazer-meta python3-openrazer
     sudo usermod -aG plugdev "$USER" 2>/dev/null || true
     success "OpenRazer installed"
@@ -152,7 +174,7 @@ fi
 step "4/10 - NVIDIA driver"
 if [ "$SKIP_NVIDIA" = 1 ]; then
     info "--no-nvidia given, skipping"
-elif ! lspci | grep -qi 'nvidia'; then
+elif ! out_matches 'nvidia' lspci; then
     info "No NVIDIA GPU detected, skipping"
 else
     # Prefer the DISTRO-SIGNED prebuilt modules over DKMS. They survive
@@ -165,7 +187,7 @@ else
     # Ampere and newer. On a pre-Ampere laptop `-open` therefore costs you
     # dGPU power-down and battery life, and the proprietary flavour (same
     # number, no `-open` suffix) is the better choice.
-    if lspci -nn | grep -qiE 'NVIDIA.*\[10de:1[e-f][0-9a-f]{2}\]'; then
+    if out_matches 'NVIDIA.*\[10de:1[e-f][0-9a-f]{2}\]' lspci -nn; then
         warn "Pre-Ampere (Turing) GPU detected."
         warn "The -open driver has no RTD3 power gating below Ampere; consider"
         warn "installing the proprietary flavour instead (no -open suffix)."
@@ -294,7 +316,7 @@ ENV_LOCAL="$HOME/.config/hypr/env-local.conf"
 DRM_CARDS=""
 for card in /dev/dri/card*; do
     [ -e "$card" ] || continue
-    udevadm info "$card" 2>/dev/null | grep -q "platform-simple-framebuffer" && continue
+    out_matches 'platform-simple-framebuffer' udevadm info "$card" && continue
     DRM_CARDS="${DRM_CARDS:+$DRM_CARDS:}$card"
 done
 
@@ -305,7 +327,7 @@ cat > "$ENV_LOCAL" <<EOF
 env = WLR_DRM_DEVICES,$DRM_CARDS
 EOF
 
-if lspci | grep -qi 'nvidia'; then
+if out_matches 'nvidia' lspci; then
     cat >> "$ENV_LOCAL" <<'ENVEOF'
 
 # NVIDIA
@@ -314,7 +336,7 @@ env = __GLX_VENDOR_LIBRARY_NAME,nvidia
 env = LIBVA_DRIVER_NAME,nvidia
 ENVEOF
     info "NVIDIA env vars written"
-elif lspci | grep -qi 'intel.*graphics'; then
+elif out_matches 'intel.*graphics' lspci; then
     cat >> "$ENV_LOCAL" <<'ENVEOF'
 
 # Intel
@@ -357,7 +379,7 @@ done
 # keyboard-fire` brings the flames back.
 AMBIENT_UNIT="$SCRIPT_DIR/caps-sudo/indicator/razer/keyboard-ambient.service"
 if [ "$CONFIGS_ONLY" = 0 ] && [ -f "$AMBIENT_UNIT" ] && \
-   { lsusb 2>/dev/null | grep -qi 'Razer' || sudo dmidecode -s system-manufacturer 2>/dev/null | grep -qi razer; }; then
+   { out_matches 'Razer' lsusb || out_matches razer sudo dmidecode -s system-manufacturer; }; then
     mkdir -p "$HOME/.config/systemd/user"
     install -m 0644 "$AMBIENT_UNIT" "$HOME/.config/systemd/user/keyboard-ambient.service"
     systemctl --user daemon-reload 2>/dev/null || true
@@ -503,8 +525,8 @@ flatpak install -y --noninteractive flathub org.gnome.NetworkDisplays 2>/dev/nul
 # it logs "Firewalld does not seem to be installed" and carries on as though
 # the ports were open. So the rules have to be added by hand.
 # See docs/WIRELESS-DISPLAY.md.
-if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q '^Status: active'; then
-    if sudo ufw status | grep -q '7236'; then
+if command -v ufw >/dev/null 2>&1 && out_matches '^Status: active' sudo ufw status; then
+    if out_matches '7236' sudo ufw status; then
         info "Miracast firewall rules already present"
     else
         sudo ufw allow 7236/tcp comment 'Miracast RTSP (gnome-network-displays)' >/dev/null
