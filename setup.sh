@@ -220,15 +220,24 @@ else
     NV_FLAVOUR="-open"
     NV_IDS="$(lspci -nn 2>/dev/null | grep -iE 'vga|3d controller' \
               | grep -oiP '10de:\K[0-9a-f]{4}' || true)"
+    NV_LEGACY=""
     for nv_id in $NV_IDS; do
         if [ "$((16#$nv_id))" -lt "$((16#1e00))" ]; then
             NV_FLAVOUR=""
+            NV_LEGACY="$nv_id"
             warn "Pre-Turing NVIDIA GPU present (10de:$nv_id) — it has no GSP, so"
-            warn "the open modules cannot drive it at all. Using the proprietary"
-            warn "driver for this machine so every card stays visible."
+            warn "the open modules cannot drive it. Using the proprietary flavour."
             break
         fi
     done
+
+    # An operator pin always wins. It exists because "newest" and "supports
+    # every card in this box" are not the same question, and only a human knows
+    # which matters here. Set it in /etc/nvidia-branch-pin (just the number) or
+    # pass NVIDIA_BRANCH=580 in the environment.
+    NV_PIN="${NVIDIA_BRANCH:-}"
+    [ -z "$NV_PIN" ] && [ -r /etc/nvidia-branch-pin ] \
+        && NV_PIN="$(tr -cd '0-9' < /etc/nvidia-branch-pin)"
 
     # `|| true` because this pipeline ends in `head -1`: head exits after the
     # first line, grep takes SIGPIPE, and under `set -o pipefail` the
@@ -238,6 +247,23 @@ else
     # and not others. The empty-result path below is the real fallback.
     NV_VER=$(ubuntu-drivers devices 2>/dev/null \
              | awk '/recommended/ {print $3}' | grep -oP 'nvidia-driver-\K[0-9]+' | head -1 || true)
+
+    if [ -n "$NV_PIN" ]; then
+        info "Driver branch pinned to $NV_PIN (was recommending ${NV_VER:-none})"
+        NV_VER="$NV_PIN"
+    elif [ -n "$NV_LEGACY" ]; then
+        # ubuntu-drivers recommends for the BEST card in the machine, so on a
+        # mixed box it happily suggests a branch that has dropped the oldest
+        # one. NVIDIA retires an architecture from new branches entirely, not
+        # just from the open modules: a Titan V (10de:1d81) works on 580 and is
+        # refused by 595 with "NVRM: ignoring the legacy GPU", proprietary
+        # flavour included. Nothing in apt metadata exposes that, so warn
+        # rather than guess, and check the result below.
+        warn "10de:$NV_LEGACY is legacy hardware. ubuntu-drivers recommends"
+        warn "$NV_VER for the newest card in this machine, which may refuse it."
+        warn "If the card disappears from nvidia-smi, pin an older branch:"
+        warn "  echo 580 | sudo tee /etc/nvidia-branch-pin && ./setup.sh"
+    fi
     if [ -z "$NV_VER" ]; then
         NV_VER=$(apt-cache search --names-only '^nvidia-driver-[0-9]+-open$' \
                  | grep -oP 'nvidia-driver-\K[0-9]+' | sort -n | tail -1)
@@ -256,6 +282,25 @@ else
         # dependency, a later `apt autoremove` will quietly rip the driver out.
         sudo apt-mark manual "nvidia-driver-$NV_VER$NV_FLAVOUR" ${HWE:+"$HWE"} >/dev/null
         success "nvidia-driver-$NV_VER$NV_FLAVOUR installed and pinned"
+    fi
+
+    # Did every card survive? A driver that has retired an architecture does
+    # not fail to install, and does not fail to load -- it brings up the cards
+    # it still supports and ignores the rest with one line in dmesg. The result
+    # is a machine that looks fine and is quietly missing a GPU. Only compare
+    # when the running driver matches the installed one, so this stays silent
+    # while a reboot is pending.
+    NV_RUNNING="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || true)"
+    if [ -n "$NV_RUNNING" ] && [ "${NV_RUNNING%%.*}" = "$NV_VER" ]; then
+        NV_ON_BUS="$(printf '%s\n' "$NV_IDS" | grep -c . || true)"
+        NV_SEEN="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -c . || true)"
+        if [ "$NV_SEEN" -lt "$NV_ON_BUS" ]; then
+            warn "$NV_ON_BUS NVIDIA GPUs on the PCI bus but the driver only sees $NV_SEEN."
+            warn "Driver $NV_VER has probably retired one of them. Check:"
+            warn "  sudo dmesg | grep -i 'NVRM.*legacy'"
+            warn "Then pin a branch that still supports it:"
+            warn "  echo <branch> | sudo tee /etc/nvidia-branch-pin && ./setup.sh"
+        fi
     fi
 
     # DRM modeset is mandatory for Wayland on NVIDIA; fbdev gives a working
