@@ -13,6 +13,7 @@ Three scripts live here, deliberately separate:
 | `gpu-passthrough.sh` | Single-GPU VFIO passthrough, Looking Glass, and a Windows VM. Razer Blade Pro 17 specific, changes boot config. | No -- read [docs/GPU-PASSTHROUGH.md](docs/GPU-PASSTHROUGH.md) first |
 | `caps-sudo/install.sh` | Makes CapsLock arm/disarm passwordless `sudo`, with the CapsLock LED as the "armed" light. Grants root without a password while armed. | No -- read [docs/CAPS-SUDO.md](docs/CAPS-SUDO.md) first |
 | `llm-serve/install.sh` | Serves Qwen3.8-27B on one 24GB NVIDIA GPU: builds llama.cpp with CUDA, downloads ~17.6GB, runs an OpenAI-compatible API + web UI on :8081. | Needs an NVIDIA GPU; API is unauthenticated by default -- read [llm-serve/README.md](llm-serve/README.md) |
+| `macbook/install.sh` | MacBook Pro (CS8409 codec) only: stops PipeWire suspending the sound card, because closing playback freezes the microphone. Per-user, no sudo. | Yes -- inert on other hardware, see [macbook/README.md](macbook/README.md) |
 
 ## What's Included
 
