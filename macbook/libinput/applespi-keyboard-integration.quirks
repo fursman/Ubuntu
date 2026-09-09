@@ -1,0 +1,23 @@
+# MacBook Pro with the applespi keyboard/trackpad (MacBookPro14,1 and relatives).
+#
+# libinput only suppresses a touchpad while you type when it can pair that
+# touchpad with a keyboard tagged "internal". libinput ships a rule for exactly
+# this keyboard, [Apple Internal Keyboard (SPI)], but it requires
+# MatchVendor=0x05AC, and the applespi driver reports:
+#
+#     I: Bus=001c Vendor=0000 Product=0000    N: Name="Apple SPI Keyboard"
+#
+# So the rule never matches, the keyboard is never tagged internal, no pairing
+# happens, and disable-while-typing silently does nothing no matter what the
+# desktop setting says. Palm rejection appears to be absent rather than weak.
+#
+# libinput already works around the same driver's other half: the touchpad
+# reports the Synaptics vendor 0x06cb, and upstream carries a separate quirk
+# with a comment saying so. The keyboard was missed.
+#
+# Match on the name instead, which is stable and unique to this driver.
+[Apple SPI Keyboard (applespi, reports vendor 0000)]
+MatchUdevType=keyboard
+MatchBus=spi
+MatchName=Apple SPI Keyboard
+AttrKeyboardIntegration=internal
