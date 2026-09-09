@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MacBook Pro hardware quirks. Two independent fixes, see README.md for the
+# MacBook Pro hardware quirks. Three independent fixes, see README.md for the
 # evidence behind each:
 #
 #   audio  Cirrus CS8409 codec: never let PipeWire suspend the analog device,
@@ -7,14 +7,17 @@
 #   input  The applespi keyboard reports vendor 0000, so libinput never tags it
 #          internal, never pairs it with the touchpad, and disable-while-typing
 #          silently does nothing. Palm rejection looks absent rather than weak.
+#   power  No sleep mode on this hardware resumes. The lid does a clean
+#          shutdown instead, and the sleep targets are masked so nothing else
+#          can try.
 #
-# The audio fix can be per-user. The input fix cannot: libinput reads exactly
-# one local file, /etc/libinput/local-overrides.quirks, so it always needs root.
+# Only the audio fix can be per-user. libinput reads exactly one local file and
+# systemd config is system-wide, so input and power always need root.
 #
 #     ./install.sh                 audio fix for this user (~/.config/wireplumber)
-#     sudo ./install.sh --system   both fixes, system-wide
+#     sudo ./install.sh --system   all three, system-wide
 #     ./install.sh --remove        undo (same scope rules)
-#     --audio / --input            do only one of them
+#     --audio / --input / --power  do only the named ones
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,19 +27,22 @@ QUIRK_DEST=/etc/libinput/local-overrides.quirks
 MARK_BEGIN="# >>> fursman/Ubuntu macbook: applespi keyboard integration >>>"
 MARK_END="# <<< fursman/Ubuntu macbook: applespi keyboard integration <<<"
 
-SCOPE=user; REMOVE=0; DO_AUDIO=1; DO_INPUT=1; PICKED=0
+SCOPE=user; REMOVE=0; PICKED=0
+DO_AUDIO=0; DO_INPUT=0; DO_POWER=0
 for a in "$@"; do
   case "$a" in
     --system) SCOPE=system ;;
     --user)   SCOPE=user ;;
     --remove) REMOVE=1 ;;
-    --audio)  DO_AUDIO=1; DO_INPUT=0; PICKED=1 ;;
-    --input)  DO_INPUT=1; DO_AUDIO=0; PICKED=1 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    --audio)  DO_AUDIO=1; PICKED=1 ;;
+    --input)  DO_INPUT=1; PICKED=1 ;;
+    --power)  DO_POWER=1; PICKED=1 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
-[ "$PICKED" = 1 ] || true
+# Naming none of them means all of them.
+if [ "$PICKED" = 0 ]; then DO_AUDIO=1; DO_INPUT=1; DO_POWER=1; fi
 
 if [ "$SCOPE" = system ]; then
   [ "$EUID" -eq 0 ] || { echo "--system needs root: sudo ./install.sh --system" >&2; exit 1; }
@@ -148,6 +154,67 @@ input() {
   rm -f "$tmp"
 }
 
+# ---------------------------------------------------------------- power ----
+SLEEP_TARGETS="sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target"
+GS_POWER=org.gnome.settings-daemon.plugins.power
+
+# gsettings needs the user's session bus, not root's.
+as_user() {
+  local u="${SUDO_USER:-}" uid
+  [ -n "$u" ] || return 0
+  uid=$(id -u "$u")
+  runuser -u "$u" -- env "XDG_RUNTIME_DIR=/run/user/$uid" \
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" "$@" 2>/dev/null || true
+}
+
+power() {
+  if [ "$EUID" -ne 0 ]; then
+    echo "!! the power fix needs root (systemd config is system-wide)"
+    echo "   run: sudo $0 --power"
+    return 0
+  fi
+
+  if [ "$REMOVE" = 1 ]; then
+    systemctl unmask $SLEEP_TARGETS >/dev/null 2>&1 || true
+    rm -f /etc/systemd/logind.conf.d/10-lid-poweroff.conf \
+          /etc/systemd/system.conf.d/10-fast-shutdown.conf
+    echo ">> unmasked the sleep targets and removed both drop-ins"
+    if command -v gnome-shell >/dev/null 2>&1; then
+      for k in lid-close-ac-action lid-close-battery-action \
+               sleep-inactive-ac-type sleep-inactive-battery-type; do
+        as_user gsettings reset "$GS_POWER" "$k"
+      done
+      echo ">> reset the GNOME lid and idle actions to their defaults"
+    fi
+  else
+    install -d -m 0755 /etc/systemd/logind.conf.d /etc/systemd/system.conf.d
+    install -m 0644 "$DIR/systemd/10-lid-poweroff.conf"  /etc/systemd/logind.conf.d/
+    install -m 0644 "$DIR/systemd/10-fast-shutdown.conf" /etc/systemd/system.conf.d/
+    echo ">> installed the logind and shutdown-timeout drop-ins"
+
+    # Masked, not just disabled: a mask cannot be pulled in as a dependency,
+    # so nothing -- desktop, upower, a stray script -- can start a suspend.
+    systemctl mask $SLEEP_TARGETS >/dev/null 2>&1 || true
+    echo ">> masked: $SLEEP_TARGETS"
+
+    # The desktop has its own lid and idle handling that runs before logind's.
+    if command -v gnome-shell >/dev/null 2>&1; then
+      as_user gsettings set "$GS_POWER" lid-close-ac-action      shutdown
+      as_user gsettings set "$GS_POWER" lid-close-battery-action shutdown
+      as_user gsettings set "$GS_POWER" sleep-inactive-ac-type   nothing
+      as_user gsettings set "$GS_POWER" sleep-inactive-battery-type nothing
+      echo ">> GNOME lid actions set to shutdown, idle sleep off"
+    fi
+  fi
+
+  # DefaultTimeoutStopSec needs a re-exec of pid 1. logind config is only read
+  # at start, and restarting logind would take the session down with it, so
+  # that half lands on the next boot.
+  systemctl daemon-reexec 2>/dev/null || true
+  echo ">> reboot for the logind change to take effect"
+}
+
 [ "$DO_AUDIO" = 1 ] && audio
 [ "$DO_INPUT" = 1 ] && input
+[ "$DO_POWER" = 1 ] && power
 exit 0

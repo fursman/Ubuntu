@@ -762,6 +762,23 @@ UDEVEOF
     success "NVMe I/O scheduler rule installed"
 fi
 
+# -- MacBook hardware quirks --
+# Three fixes that are right on an Apple laptop and wrong everywhere else, so
+# they are gated on the DMI vendor: the sound card must never be suspended
+# (closing playback freezes capture), the trackpad's keyboard has to be tagged
+# internal before palm rejection will run at all, and no sleep mode on this
+# hardware resumes, so the lid does a clean shutdown and the sleep targets are
+# masked. Evidence for each is in macbook/README.md; undo with
+# `sudo macbook/install.sh --remove`.
+if [ "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" = "Apple Inc." ]; then
+    step "MacBook hardware quirks"
+    if sudo "$SCRIPT_DIR/macbook/install.sh" --system; then
+        success "MacBook quirks applied (reboot for the lid change to take effect)"
+    else
+        warn "MacBook quirks failed; run macbook/install.sh by hand"
+    fi
+fi
+
 fi  # end CONFIGS_ONLY guard
 
 # ---------------------------------------------------------------------------

@@ -1,23 +1,26 @@
 # MacBook Pro -- the quirks this machine needs
 
-Two small, hardware-specific fixes for a MacBook Pro running Ubuntu. They are
-independent, both are inert on other hardware, and both are here for the same
-reason: the symptom looked nothing like the cause.
+Three small, hardware-specific fixes for a MacBook Pro running Ubuntu. They are
+independent, all are inert on other hardware, and the first two are here for the
+same reason: the symptom looked nothing like the cause.
 
 Tested on a **MacBookPro14,1** (2017 13-inch, Kaby Lake), but neither fix is
 tied to that model -- one matches on an audio codec id, the other on an input
 device name.
 
 ```bash
-./install.sh                 # audio fix, this user only (~/.config/wireplumber, no sudo)
-sudo ./install.sh --system   # both fixes, system-wide
-./install.sh --remove        # undo (same scope rules)
-./install.sh --audio         # only one of them
-sudo ./install.sh --input    # ditto
+./install.sh                        # audio fix, this user only, no sudo
+sudo ./install.sh --system          # all three, system-wide
+sudo ./install.sh --system --remove # undo
+sudo ./install.sh --power           # only the named ones
 ```
 
-The input fix always needs root: libinput reads exactly one local file,
-`/etc/libinput/local-overrides.quirks`, and there is no per-user equivalent.
+The top-level `setup.sh` runs all three on its own when the DMI vendor is
+`Apple Inc.`, so a fresh install needs no extra step.
+
+Only the audio fix can be per-user. libinput reads exactly one local file,
+`/etc/libinput/local-overrides.quirks`, and systemd configuration is
+system-wide, so the other two always need root.
 
 ---
 
@@ -205,6 +208,79 @@ watch -n1 'pactl list sinks short | grep analog'
 
 Without the rule it goes `IDLE` -> `SUSPENDED` at five seconds and the recorder
 falls silent. With it, it stays `IDLE`.
+
+
+---
+
+# 3. Nothing resumes, so the lid powers off
+
+Every sleep mode on this hardware is broken. Tested on MacBookPro14,1, Ubuntu
+26.04, kernel 7.0, root on LUKS -> LVM -> ext4:
+
+| mode | result |
+|---|---|
+| `deep` (S3) | journal ends at `PM: suspend entry (deep)` and never resumes. Four attempts, four failures. |
+| `s2idle` | same, ends at `PM: suspend entry (s2idle)`. Keyboard and power button both dead afterwards; only a long power hold and a cold boot recovers it. |
+| hibernate, `platform` | firmware bounces it. `Preparing to enter system sleep state S4` is followed immediately by `Waking up from system sleep state S4`. |
+| hibernate, `shutdown` | powers down, and on the way back the LUKS passphrase is accepted and then the screen goes black. Never restores. |
+
+A trap worth knowing: writing `/sys/power/disk` by hand does nothing, because
+`systemd-sleep` writes its own `HibernateMode=` into that file immediately
+before hibernating. Test by setting `HibernateMode=` in
+`/etc/systemd/sleep.conf`, not by poking sysfs.
+
+So the machine is on, or it is off. The lid does a clean shutdown. That turns
+out to be better for battery and for security anyway, and on a machine that
+boots to a LUKS prompt in a few seconds it is a small loss.
+
+## The fix
+
+Two drop-ins and a mask:
+
+- `systemd/10-lid-poweroff.conf` -> `/etc/systemd/logind.conf.d/`. Powers off on
+  lid close in **all three** variants, because "docked" and "on external power"
+  are separate settings and a default in either means the lid still suspends
+  there. `LidSwitchIgnoreInhibited=yes` is what stops the desktop taking the lid
+  event for itself and suspending anyway.
+- `systemd/10-fast-shutdown.conf` -> `/etc/systemd/system.conf.d/`. Bounds
+  `DefaultTimeoutStopSec` to 10s, down from Ubuntu's 90s. Once the lid means a
+  real shutdown, one stuck unit can otherwise leave the machine half-off in a
+  bag with the fans running.
+- The five sleep targets are **masked**, not disabled: `sleep.target`,
+  `suspend.target`, `hibernate.target`, `hybrid-sleep.target`,
+  `suspend-then-hibernate.target`. A mask cannot be pulled in as a dependency,
+  so nothing -- the desktop, upower, a stray script -- can start a suspend.
+- On GNOME, `lid-close-ac-action` and `lid-close-battery-action` are set to
+  `shutdown` and both `sleep-inactive-*-type` keys to `nothing`, because the
+  desktop has its own lid and idle handling that runs ahead of logind's.
+
+`DefaultTimeoutStopSec` takes effect on a `daemon-reexec`, which the installer
+does. **The logind change needs a reboot:** logind reads its configuration at
+start, and restarting it would take your session down with it.
+
+## Verifying
+
+```bash
+systemctl is-enabled sleep.target suspend.target hibernate.target \
+  hybrid-sleep.target suspend-then-hibernate.target      # five x masked
+systemd-analyze cat-config systemd/logind.conf | grep -A6 lid-poweroff
+gsettings get org.gnome.settings-daemon.plugins.power lid-close-battery-action
+```
+
+Then close the lid. It should power off, not sleep.
+
+## If suspend works on your Mac
+
+Some models are fine. `sudo ./install.sh --power --remove` unmasks the targets,
+removes both drop-ins, and resets the GNOME keys to their defaults.
+
+## Leftovers on a machine that tried hibernation first
+
+Harmless, but worth recognising. A swap file grown to hold a hibernation image
+stays oversized; nothing needs to shrink it, and swap is worth keeping on for
+paging regardless. A dracut `resume` module drop-in in `/etc/dracut.conf.d/` is
+inert once `resume=` is off the kernel command line. Ubuntu's default command
+line carries no `resume=`, so a fresh install has nothing to strip.
 
 ---
 
