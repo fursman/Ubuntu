@@ -7,6 +7,7 @@ Super + Enter          App Launcher (Rofi)
 Super + T              Terminal (Kitty)
 Super + B              Firefox
 Super + Alt + B        Chromium
+Super + C              Claude
 Super + F              File Manager (Thunar)
 Super + A              Audio Settings
 Super + S              Signal

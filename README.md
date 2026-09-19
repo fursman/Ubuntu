@@ -115,6 +115,7 @@ Press **Super + Space** to see all keybinds in a searchable Rofi menu.
 | `Super + T` | Terminal (Kitty) |
 | `Super + B` | Firefox |
 | `Super + Alt + B` | Chromium |
+| `Super + C` | Claude (desktop app) |
 | `Super + F` | File Manager (Thunar) |
 | `Super + A` | Audio Settings (pavucontrol) |
 | `Super + S` | Signal |

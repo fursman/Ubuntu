@@ -123,6 +123,29 @@ else
     warn "If Hyprland is older than 0.55, some window rules in hyprland.conf will warn"
 fi
 
+# Claude desktop app (Linux beta) comes from Anthropic's own apt repository, so
+# it updates with the rest of the system -- the app does not update itself on
+# Linux. The key is checked against the fingerprint Anthropic publishes before
+# the repository is trusted: a wrong key would otherwise only surface later as
+# NO_PUBKEY BAA929FF1A7ECACE, breaking `apt-get update` for everything.
+# https://code.claude.com/docs/en/desktop-linux
+CLAUDE_KEYRING=/usr/share/keyrings/claude-desktop-archive-keyring.asc
+CLAUDE_KEY_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+CLAUDE_REPO_OK=0
+if [ -f /etc/apt/sources.list.d/claude-desktop.list ] && [ -f "$CLAUDE_KEYRING" ]; then
+    info "Claude desktop repository already configured"
+    CLAUDE_REPO_OK=1
+elif sudo curl -fsSLo "$CLAUDE_KEYRING" https://downloads.claude.ai/claude-desktop/key.asc \
+     && out_matches "$CLAUDE_KEY_FPR" gpg --show-keys --with-colons "$CLAUDE_KEYRING"; then
+    echo "deb [arch=amd64,arm64 signed-by=$CLAUDE_KEYRING] https://downloads.claude.ai/claude-desktop/apt/stable stable main" \
+        | sudo tee /etc/apt/sources.list.d/claude-desktop.list >/dev/null
+    success "Claude desktop repository added"
+    CLAUDE_REPO_OK=1
+else
+    sudo rm -f "$CLAUDE_KEYRING"
+    warn "Claude desktop signing key missing or fingerprint mismatch -- skipping the app"
+fi
+
 sudo dpkg --configure -a 2>/dev/null || true
 sudo apt-get update
 
@@ -165,6 +188,20 @@ apt_need thunar thunar-volman tumbler pavucontrol \
 apt_need build-essential pkg-config meson ninja-build cmake \
          python3-dev python3-venv python3-pip \
          libwayland-dev wayland-protocols liblz4-dev scdoc
+
+# -- Claude desktop app (SUPER+C) --
+# Its Recommends pull in qemu/ovmf/virtiofsd for the Cowork tab, which runs its
+# tasks in a KVM guest. Cowork also opens /dev/vhost-vsock, and unlike /dev/kvm
+# that node gets no logind ACL for the seated user -- only the kvm group works.
+if [ "$CLAUDE_REPO_OK" = 1 ]; then
+    apt_need claude-desktop
+    if id -nG "$USER" | grep -qw kvm; then
+        info "$USER already in kvm group"
+    else
+        sudo usermod -aG kvm "$USER"
+        info "Added $USER to kvm group (re-login required for Claude's Cowork tab)"
+    fi
+fi
 
 success "Packages installed"
 
