@@ -94,15 +94,15 @@ window#waybar.hidden { opacity: 0.2; }
 /* Voice assistant */
 #custom-voice { padding: 0 14px 0 16px; font-size: 18px; }
 #custom-voice.off { color: #6272a4; }
-#custom-voice.ready { animation: pulse 1.5s ease-in-out infinite alternate; color: #50fa7b; }
+/* "ready" and an unread-notification bell can last for hours: static, because an
+   infinite CSS animation repaints the bar -- and Hyprland re-blurs behind it -- at
+   60 fps (the flashing bell alone: Hyprland 12.8% -> 3.0%, waybar 6.5% -> 1.6%).
+   The pulses below only run for the seconds of a turn. */
+#custom-voice.ready { color: #50fa7b; }
 #custom-voice.listening { animation: pulse-listen 600ms ease-in-out infinite alternate; color: #33ccff; }
 #custom-voice.thinking { animation: pulse-think 800ms ease-in-out infinite alternate; color: #bd93f9; }
 #custom-voice.speaking { animation: pulse-speak 400ms ease-in-out infinite alternate; color: #ff5555; }
 
-@keyframes pulse {
-    from { opacity: 0.6; }
-    to { opacity: 1.0; }
-}
 @keyframes pulse-listen {
     from { opacity: 0.4; text-shadow: 0 0 4px #33ccff; }
     to { opacity: 1.0; text-shadow: 0 0 12px #33ccff; }
@@ -123,8 +123,7 @@ window#waybar.hidden { opacity: 0.2; }
 
 /* Notification center */
 #custom-notification { padding: 0 16px 0 8px; color: #f8f8f2; }
-#custom-notification.notification { animation: bell-flash 1s ease-in-out infinite alternate; }
-@keyframes bell-flash { from { color: #f8f8f2; } to { color: #f1fa8c; } }
+#custom-notification.notification { color: #f1fa8c; }
 
 /* caps-sudo indicator: a calm lock when disarmed, a red !-in-triangle pill
    when armed (mirrors GNOME's screen-recording indicator). */

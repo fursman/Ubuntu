@@ -156,7 +156,10 @@ hl.animation({ leaf = "fade",             enabled = true, speed = 5,  bezier = "
 hl.animation({ leaf = "fadeIn",           enabled = true, speed = 4,  bezier = "easeOutExpo" })
 hl.animation({ leaf = "fadeOut",          enabled = true, speed = 4,  bezier = "easeInExpo" })
 hl.animation({ leaf = "border",           enabled = true, speed = 10, bezier = "smooth" })
-hl.animation({ leaf = "borderangle",      enabled = true, speed = 80, bezier = "liner",        style = "loop" })
+-- Not looping: a border angle that animates forever makes Hyprland redraw the
+-- screen at 60 fps with nothing else happening -- measured 26.5% -> 12.5% of a
+-- core on the Blade 17's 4K panel. The gradient itself stays.
+hl.animation({ leaf = "borderangle",      enabled = false, speed = 80, bezier = "liner" })
 hl.animation({ leaf = "workspaces",       enabled = true, speed = 5,  bezier = "easeOutQuint", style = "slidefade 30%" })
 hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 5,  bezier = "easeOutExpo",  style = "slidevert" })
 hl.animation({ leaf = "layers",           enabled = true, speed = 4,  bezier = "easeOutQuint", style = "popin 90%" })
