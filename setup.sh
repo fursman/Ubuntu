@@ -312,14 +312,29 @@ else
         info "nvidia-driver-$NV_VER already active"
     else
         info "Installing nvidia-driver-$NV_VER$NV_FLAVOUR (signed prebuilt modules)"
+        # Not the -edge variant: it tracks the HWE *edge* kernel series, not the
+        # linux-generic-hwe kernel that is installed, and sort -V put it last. On
+        # pile (2026-09-24) the kernel moved to 7.0.0-34 while the edge metapackage
+        # stayed at -31, so the new kernel booted with no nvidia.ko at all: firmware
+        # framebuffer resolution and "couldn't communicate with the NVIDIA driver".
         HWE=$(apt-cache search --names-only "^linux-modules-nvidia-$NV_VER$NV_FLAVOUR-generic-hwe-" \
-              | awk '{print $1}' | sort -V | tail -1)
+              | awk '{print $1}' | grep -v -- '-edge$' | sort -V | tail -1)
         apt_need "nvidia-driver-$NV_VER$NV_FLAVOUR" ${HWE:+"$HWE"}
         # Pin them manual: if the metapackage is only ever pulled in as a
         # dependency, a later `apt autoremove` will quietly rip the driver out.
         sudo apt-mark manual "nvidia-driver-$NV_VER$NV_FLAVOUR" ${HWE:+"$HWE"} >/dev/null
         success "nvidia-driver-$NV_VER$NV_FLAVOUR installed and pinned"
     fi
+
+    # Machines set up before the -edge fix above still carry that metapackage:
+    # swap each one for the kernel series actually installed.
+    for EDGE in $(dpkg-query -W -f='${Package} ${Status}\n' 'linux-modules-nvidia-*-generic-hwe-*-edge' 2>/dev/null \
+                  | awk '/ install ok installed$/ {print $1}'); do
+        info "Replacing $EDGE with ${EDGE%-edge} (the -edge metapackage follows a different kernel series)"
+        apt_need "${EDGE%-edge}"
+        sudo apt-mark manual "${EDGE%-edge}" >/dev/null
+        sudo apt-get remove -y "$EDGE" </dev/null >/dev/null && success "Removed $EDGE"
+    done
 
     # Did every card survive? A driver that has retired an architecture does
     # not fail to install, and does not fail to load -- it brings up the cards
