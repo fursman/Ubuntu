@@ -59,8 +59,12 @@ def main():
     dm = openrazer.client.DeviceManager()
     kb = next((d for d in dm.devices if d.type == "keyboard"), None)
     if kb is None:
-        print("No Razer keyboard found", file=sys.stderr)
-        sys.exit(1)
+        # Nothing to light: a success, not a failure. setup.sh installs this
+        # unit for any Razer USB device, and on a desktop with a keyboard
+        # openrazer cannot drive (pile's Pro Type Ultra, 1532:027b) exit 1 had
+        # Restart=on-failure retry it every 5 s: 381,835 times in 23 days.
+        print("No Razer keyboard that openrazer can drive; nothing to do", file=sys.stderr)
+        sys.exit(0)
 
     print(f"Ambient light on {kb.name} "
           f"({kb.fx.advanced.rows}x{kb.fx.advanced.cols}), caps key at {CAPS_POS}")
