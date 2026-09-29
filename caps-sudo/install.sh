@@ -56,14 +56,19 @@ if [ -d "$GNOME_EXT_SRC" ] && command -v gnome-shell >/dev/null 2>&1; then
   install -d -o "$OWNER" -g "$OWNER" "$EXT_DIR"
   install -m 0644 -o "$OWNER" -g "$OWNER" "$GNOME_EXT_SRC"/* "$EXT_DIR"/
   # Pre-enable it; GNOME cannot hot-load a new extension on Wayland, so it
-  # comes up on the user's next login.
+  # comes up on the user's next login. The UUID goes in through the
+  # environment: the old version spliced '$0' into this script's own quoting,
+  # so the OUTER shell expanded it and enabled "/path/to/install.sh" instead.
   sudo -u "$OWNER" env XDG_RUNTIME_DIR="/run/user/$(id -u "$OWNER")" \
-    gsettings get org.gnome.shell enabled-extensions 2>/dev/null \
-    | grep -q "$GNOME_EXT_UUID" || \
-    sudo -u "$OWNER" env XDG_RUNTIME_DIR="/run/user/$(id -u "$OWNER")" bash -c \
-      'cur=$(gsettings get org.gnome.shell enabled-extensions); \
-       gsettings set org.gnome.shell enabled-extensions "${cur%]}, '"'"'"'$0'"'"'"']"' \
-      "$GNOME_EXT_UUID" 2>/dev/null || true
+    EXT="$GNOME_EXT_UUID" bash -c '
+      q="'"'"'"
+      cur=$(gsettings get org.gnome.shell enabled-extensions)
+      case "$cur" in
+        *"$q$EXT$q"*)    exit 0 ;;
+        "@as []"|"[]")   new="[$q$EXT$q]" ;;
+        *)               new="${cur%]}, $q$EXT$q]" ;;
+      esac
+      gsettings set org.gnome.shell enabled-extensions "$new"' 2>/dev/null || true
   echo "   (log out and back in to see it -- Wayland cannot hot-load extensions)"
 fi
 if command -v waybar >/dev/null 2>&1; then
