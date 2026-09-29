@@ -9,10 +9,15 @@ Super + B              Firefox
 Super + Alt + B        Chromium
 Super + C              Claude
 Super + F              File Manager (Thunar)
-Super + A              Audio Settings
+Super + O              Audio Settings
 Super + S              Signal
 Super + R              Pika Backup
 Super + K              Passwords (Seahorse)
+<b>--- Assistant ---</b>
+Super (tap)            Voice Mode On/Off
+Super + A              Conversation Panel
+Super + M              Swap Model
+Super + Shift + V      New Conversation
 <b>--- Windows ---</b>
 Super + Q              Close Window
 Super + Escape         Fullscreen

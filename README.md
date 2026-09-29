@@ -117,10 +117,21 @@ Press **Super + Space** to see all keybinds in a searchable Rofi menu.
 | `Super + Alt + B` | Chromium |
 | `Super + C` | Claude (desktop app) |
 | `Super + F` | File Manager (Thunar) |
-| `Super + A` | Audio Settings (pavucontrol) |
+| `Super + O` | Audio Settings (pavucontrol) |
 | `Super + S` | Signal |
 | `Super + R` | Pika Backup |
 | `Super + K` | Passwords (Seahorse) |
+
+### Voice assistant
+
+Inert unless [the assistant](https://github.com/fursman/Assistant) is installed.
+
+| Key | Action |
+|-----|--------|
+| `Super` (tap) | Voice mode on / off |
+| `Super + A` | Conversation panel |
+| `Super + M` | Swap model (local / Claude) |
+| `Super + Shift + V` | New conversation |
 
 ### Windows
 
