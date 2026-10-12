@@ -173,7 +173,10 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("swaync")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
-    hl.exec_cmd("swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 'hyprctl dispatch dpms off' resume 'hyprctl dispatch dpms on' before-sleep '~/.local/bin/lock-screen'")
+    -- Under a Lua config `hyprctl dispatch` takes a Lua dispatcher expression;
+    -- the old `dpms off` form fails to parse and the screen never powers down.
+    -- [[...]] so the inner quotes need no Lua escaping.
+    hl.exec_cmd([[swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" resume "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" before-sleep '~/.local/bin/lock-screen']])
 end)
 
 -------------------------------------------------------------- WINDOW RULES --
