@@ -80,6 +80,40 @@ Clean — the group holds the GPU, its audio function, and the root port above
 them. No ACS override patch is needed, which is fortunate: ACS override is a
 non-upstream kernel patch and would break on every kernel update.
 
+### IOMMU address width, large BARs, and Resizable BAR
+
+Two hardware limits bite modern desktop cards and are invisible until the VM
+dies at device init with `vfio: DMA mapping failed, unable to continue`.
+
+**Resizable BAR.** A current GPU (RTX 4090 and friends) with ReBAR enabled in
+firmware exposes its whole VRAM as one multi-gigabyte BAR. QEMU/VFIO cannot
+DMA-map a BAR that large and the VM aborts. **Turn Resizable BAR off in the
+firmware** (leave Above-4G Decoding on); BAR1 drops back to 256 MiB and maps.
+
+**IOMMU address width.** Consumer Intel VT-d is often only **39-bit**
+(`dmesg | grep "DMAR: Host address width"`), i.e. it can map IOVAs up to
+512 GiB and no higher. With a `host-passthrough` CPU the guest inherits the
+host's ~46-bit width, and QEMU places the 64-bit PCI MMIO window — holding the
+GPU BAR *and* any `ivshmem`/kvmfr BAR — up around 56 TiB. The IOMMU cannot map
+there, every `vfio_container_dma_map(...)` returns `-22`, and the VM aborts.
+(For the GPU BAR this is now a non-fatal warning in recent QEMU; for the
+ivshmem shared-memory BAR it is still fatal.)
+
+The fix is to cap the guest's physical-address width so that window lands below
+the IOMMU ceiling:
+
+```xml
+<cpu mode='host-passthrough' ...>
+  <maxphysaddr mode='passthrough' limit='39'/>
+</cpu>
+```
+
+It must be `mode='passthrough'` with `limit=` equal to the IOMMU width (39 on
+most consumer Intel, 40 on much of AMD) — `limit='40'` on a 39-bit IOMMU is one
+bit too high and still fails, and `mode='emulate' bits='39'` does not relocate
+the window at all. This is a documented limitation, not a bug; nothing to patch
+upstream.
+
 ---
 
 ## Looking Glass: getting the picture back
@@ -124,6 +158,19 @@ SUBSYSTEM=="kvmfr", OWNER="user", GROUP="kvm", MODE="0660"
 The QEMU side is wired up through `<qemu:commandline>` in the domain XML, using
 an `ivshmem-plain` device backed by `memory-backend-file` pointing at
 `/dev/kvmfr0` with `size=134217728` (128 MiB — must match `static_size_mb`).
+
+Because kvmfr is referenced only through `<qemu:commandline>` and not as a real
+libvirt device, two host permissions must be added by hand or the VM fails to
+start with `/dev/kvmfr0 ... Permission denied` (which `chmod` does **not**
+fix):
+
+- `/dev/kvmfr0` in the `cgroup_device_acl` list in `/etc/libvirt/qemu.conf`.
+- `/dev/kvmfr0 rw,` in `/etc/apparmor.d/local/abstractions/libvirt-qemu`
+  (virt-aa-helper never adds it, since it isn't in the domain XML as a device).
+
+And the ivshmem BAR is subject to the IOMMU-address-width limit above: without
+the `maxphysaddr` cap, mapping this shared-memory region is exactly what aborts
+the VM on a 39-bit IOMMU.
 
 Release the captured cursor with **Right-Ctrl**.
 
@@ -297,6 +344,32 @@ starting a second one.
 
 To go back to CUDA and an NVIDIA-driven desktop, reboot and take the default
 entry.
+
+## Making Windows boot in the VM
+
+Passing the hardware through is only half of it; a Windows install that boots on
+bare metal can still fail inside the VM.
+
+**`HYPERVISOR_ERROR` (stop code `0x20001`) on cold boot.** Windows is running its
+own hypervisor for Virtualization-Based Security / Memory Integrity / Hyper-V,
+and it crashes under nested virtualization. It bluescreens the same way on bare
+metal once the image is in this state, so it reads like a VM fault but isn't.
+Fix it from a working (bare-metal) boot: **turn off Memory Integrity (Core
+Isolation)** in Windows Security. `bcdedit /set hypervisorlaunchtype off` alone
+is silently re-enabled while Memory Integrity is on, and merely exposing nested
+`vmx` to the guest is not enough — the GUI toggle is the one that sticks. Then
+do a **full** shutdown.
+
+**Dirty / transplant NTFS.** A disk that has booted on bare metal may need one
+bare-metal boot + `chkdsk` + full shutdown (Fast Startup off) before it will
+boot in the VM, to clear the hibernated/dirty state.
+
+**The GPU will not reset on a guest reboot.** A reboot-in-place wedges the VM
+(`cont: Resetting the Virtual Machine is required`). Set
+`<on_reboot>destroy</on_reboot>` so a guest restart becomes a clean power-off;
+start it again to get a fresh, properly-reset card. A Windows Update restart
+therefore leaves the VM off rather than returning — start it back up (the
+lifecycle helper can do this).
 
 ## Recovery notes
 

@@ -17,8 +17,15 @@ set -e
 #   * insmod ext2, not lvm          -- /boot here is plain ext4 on its own
 #                                      partition, outside the LUKS volume
 #   * KERNEL is PINNED              -- "newest kernel" autodetection would have
-#                                      picked one that RCU-stalled on this box
-KERNEL=7.0.0-30-generic
+#                                      picked one that RCU-stalled on this box.
+#                                      NOTE: bump this line after a kernel
+#                                      upgrade. If the pinned kernel is removed
+#                                      the script emits nothing and the entry
+#                                      silently vanishes from the GRUB menu.
+#   * gfxmode is NOT a grub command -- use `set gfxpayload=keep`; the old
+#                                      `gfxmode $linux_gfx_mode` printed a
+#                                      "not a valid command" error at boot.
+KERNEL=7.0.0-38-generic
 BOOT_UUID=1463ddd9-0a71-417e-b802-723beb105af9
 ROOT=/dev/mapper/ubuntu--vg-ubuntu--lv
 
@@ -30,7 +37,7 @@ cat << EOF
 menuentry 'Ubuntu (GPU Passthrough - RTX 4090 to VM)' --class ubuntu --class gnu-linux --class gnu --class os \$menuentry_id_option 'gnulinux-gpu-passthrough' {
 	recordfail
 	load_video
-	gfxmode \$linux_gfx_mode
+	set gfxpayload=keep
 	insmod gzio
 	insmod part_gpt
 	insmod ext2
