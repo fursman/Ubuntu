@@ -371,6 +371,36 @@ start it again to get a fresh, properly-reset card. A Windows Update restart
 therefore leaves the VM off rather than returning — start it back up (the
 lifecycle helper can do this).
 
+## Automating the manual steps (not done yet)
+
+A note for whoever extends `gpu-passthrough.sh` next, human or agent. The fixes
+above are currently applied by hand per host. Most are deterministic and belong
+in the installer, which already enumerates this box's PCI IDs and IOMMU groups:
+
+- **`maxphysaddr` cap.** Read the IOMMU width from the kernel log
+  (`DMAR: Host address width NN`, or `amd_iommu` equivalent) and inject
+  `<maxphysaddr mode='passthrough' limit='NN'/>` into the generated domain XML.
+  No guessing — the number is on that line.
+- **kvmfr host permissions.** In the step that builds kvmfr, also add
+  `/dev/kvmfr0` to `cgroup_device_acl` in `/etc/libvirt/qemu.conf` and write
+  `/dev/kvmfr0 rw,` to `/etc/apparmor.d/local/abstractions/libvirt-qemu`
+  (idempotently). Without these the VM dies with a misleading
+  `Permission denied` that `chmod` does not fix.
+- **`<on_reboot>destroy</on_reboot>`** in the generated domain, so a guest
+  restart power-cycles instead of wedging the un-resettable GPU.
+
+Two cannot be set from a Linux installer, so detect-and-warn is the most it can
+do:
+
+- **Resizable BAR** is firmware-only. Detect it is on (a GPU BAR far larger than
+  256 MiB) and print "disable Resizable BAR in firmware" rather than letting the
+  VM crash at device init.
+- **Windows Memory Integrity / VBS** is guest-side. Out of scope beyond a
+  documented note; it is what causes `HYPERVISOR_ERROR 0x20001`.
+
+Caveat for the implementer: this script rewrites boot config and defines VMs.
+Test each addition against a real boot, not just `--check`.
+
 ## Recovery notes
 
 - The vBIOS lives at `~/.local/share/vfio-assets/gpu.rom` and in the pre-upgrade
