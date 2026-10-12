@@ -1,97 +1,199 @@
 @import "palette.css";
 
-/* swaync — colours come from the shared Dracula palette. */
+/* swaync — colours come from the shared Dracula palette.
+ *
+ * Sized for the 4K / 32:9 panels these machines drive at scale 1: the
+ * stock 12px body text is unreadable there. Popups and the control centre
+ * share one card style, so a notification looks the same in both places.
+ * Urgency shows as the card's left edge: muted for low, purple for normal,
+ * red for critical. */
 
 * {
     font-family: "JetBrains Mono", "Symbols Nerd Font", monospace;
-    font-weight: bold;
 }
 
-.control-center {
-    background: alpha(@bg, 0.9);
-    border: 2px solid @comment;
-    border-radius: 12px;
-    padding: 10px;
-}
-
-.control-center .notification-row {
-    border-radius: 10px;
-}
+/* -- Cards ------------------------------------------------------------- */
 
 .notification-row {
     outline: none;
-}
-
-.notification {
-    background: alpha(@current, 0.8);
-    border: 1px solid @comment;
-    border-radius: 10px;
-    margin: 5px;
+    margin: 0;
     padding: 0;
 }
 
+/* The stock theme tints the focused row/group grey. With grouping off every
+ * card sits in a one-item group, so that tint shows as a band behind
+ * whichever card has keyboard focus; the purple border below marks it. */
+:root {
+    --noti-bg-focus: transparent;
+}
+
+.notification-row:focus .notification {
+    border-color: @purple;
+}
+
+.notification-row .notification-background {
+    padding: 6px 8px;
+}
+
+.notification-row .notification-background .notification {
+    background: alpha(@bg, 0.94);
+    border: 1px solid @border-soft;
+    border-left: 4px solid @purple;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px @shadow-soft;
+    padding: 0;
+}
+
+.notification-row .notification-background .notification.low {
+    border-left-color: @comment;
+}
+
+.notification-row .notification-background .notification.critical {
+    border-left-color: @red;
+    background: mix(@bg, @red, 0.10);
+}
+
+.notification-row .notification-background .notification .notification-default-action {
+    border-radius: 12px;
+    padding: 6px;
+}
+
+.notification-row .notification-background .notification .notification-default-action:hover {
+    background: @surface-hover;
+}
+
 .notification-content {
-    padding: 10px;
+    padding: 8px;
+}
+
+.notification-content .app-icon,
+.notification-content .image {
+    margin-right: 12px;
 }
 
 .summary {
-    color: @cyan;
-    font-size: 14px;
-}
-
-.body {
     color: @fg;
-    font-size: 12px;
-    font-weight: normal;
-    padding-bottom: 8px;
+    font-size: 18px;
+    font-weight: bold;
 }
 
 .time {
     color: @comment;
-    font-size: 11px;
+    font-size: 14px;
+    margin-right: 28px;
+}
+
+.body {
+    color: alpha(@fg, 0.85);
+    font-size: 16px;
+    font-weight: normal;
+    margin-top: 4px;
+}
+
+.notification-alt-actions {
+    padding: 0 8px 8px 8px;
+}
+
+.notification-action > button {
+    background: @current;
+    color: @fg;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    padding: 6px 12px;
+    margin: 0 4px;
+}
+
+.notification-action > button:hover {
+    background: @purple;
+    color: @bg;
+}
+
+progressbar trough {
+    background: @current;
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+progressbar progress {
+    background: @purple;
+    border-radius: 4px;
+    min-height: 6px;
 }
 
 .close-button {
-    background: @red;
-    color: @bg;
+    background: @current;
+    color: @fg;
+    border: none;
     border-radius: 50%;
-    min-width: 24px;
-    min-height: 24px;
-    margin: 5px;
+    min-width: 28px;
+    min-height: 28px;
+    margin: 10px;
+    padding: 0;
 }
 
 .close-button:hover {
-    background: lighter(@red);
-}
-
-.widget-title {
-    color: @purple;
-    font-size: 18px;
-    margin: 5px;
-}
-
-.widget-title button {
-    background: @purple;
+    background: @red;
     color: @bg;
-    border-radius: 8px;
-    padding: 4px 12px;
-    border: none;
 }
 
-.widget-title button:hover {
-    background: lighter(@purple);
+/* -- Control centre ---------------------------------------------------- */
+
+.control-center {
+    background: alpha(@bg, 0.92);
+    border: 2px solid @border-soft;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px @shadow-soft;
+    padding: 12px;
+}
+
+.control-center .control-center-list {
+    background: transparent;
+}
+
+.control-center .control-center-list-placeholder {
+    color: @comment;
+    font-size: 18px;
+    opacity: 1;
+}
+
+.widget {
+    margin: 4px 8px;
+}
+
+.widget-title > label {
+    color: @purple;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.widget-title > button {
+    background: @current;
+    color: @fg;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    padding: 6px 14px;
+}
+
+.widget-title > button:hover {
+    background: @red;
+    color: @bg;
 }
 
 .widget-dnd {
+    margin-bottom: 8px;
+}
+
+.widget-dnd > label {
     color: @fg;
-    margin: 5px;
-    padding: 5px;
+    font-size: 16px;
 }
 
 .widget-dnd > switch {
     background: @current;
-    border-radius: 12px;
-    border: 1px solid @comment;
+    border: 1px solid @border-soft;
+    border-radius: 14px;
 }
 
 .widget-dnd > switch:checked {
@@ -101,4 +203,40 @@
 .widget-dnd > switch slider {
     background: @fg;
     border-radius: 50%;
+}
+
+/* -- Media (only shown while something is playing) --------------------- */
+
+.widget-mpris {
+    --mpris-album-art-icon-size: 88px;
+}
+
+.widget-mpris .widget-mpris-player {
+    border-radius: 12px;
+    margin: 4px 0 8px 0;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay {
+    background: alpha(@bg, 0.70);
+    padding: 12px;
+}
+
+.widget-mpris .widget-mpris-title {
+    color: @fg;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.widget-mpris .widget-mpris-subtitle {
+    color: @cyan;
+    font-size: 15px;
+}
+
+.widget-mpris button {
+    color: @fg;
+    border-radius: 8px;
+}
+
+.widget-mpris button:hover {
+    background: @surface-hover;
 }

@@ -14,11 +14,22 @@
 # started again, unless it is crashing in a loop or Hyprland has gone.
 # Each exit is also sent to the journal (journalctl -t waybar-launch), which
 # outlives the per-login log.
+#
+# waybar's module commands (swaync-client -swb, playerctl --follow, ...) are
+# not killed when waybar aborts: they were reparented to init and lived on,
+# one set per crash -- pile had seven idle swaync-client subscribers. The
+# launcher therefore runs as its own session leader and, after every exit,
+# kills whatever is still in its session apart from itself.
 
 LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/waybar"
 LOG="$LOG_DIR/launch.log"
 MAX_CRASHES=5    # this many crashes inside WINDOW seconds means give up
 WINDOW=60
+
+# Own session, so "everything waybar left behind" is exactly our session.
+if [ "$(ps -o sid= -p $$ | tr -d ' ')" != "$$" ]; then
+    exec setsid "$0" "$@"
+fi
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"    # one login's worth
@@ -34,11 +45,22 @@ if pgrep -x waybar >/dev/null; then
     exit 0
 fi
 
+reap_leftovers() {
+    local pid left=()
+    for pid in $(pgrep -s $$); do
+        [ "$pid" = "$$" ] || left+=("$pid")
+    done
+    [ ${#left[@]} -gt 0 ] && kill -TERM "${left[@]}" 2>/dev/null
+}
+trap reap_leftovers EXIT
+trap 'exit 143' TERM INT HUP    # so restart-waybar's TERM still runs the EXIT trap
+
 crashes=()
 while :; do
     note "starting waybar"
     waybar >> "$LOG" 2>&1
     status=$?
+    reap_leftovers
     case $status in
         0|130|137|143)
             note "waybar stopped (status $status), not restarting"

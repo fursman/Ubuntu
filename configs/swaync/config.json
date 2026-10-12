@@ -2,14 +2,17 @@
   "$schema": "/etc/xdg/swaync/configSchema.json",
   "positionX": "right",
   "positionY": "top",
+  "layer-shell-cover-screen": true,
   "control-center-margin-top": 10,
   "control-center-margin-bottom": 10,
   "control-center-margin-right": 10,
-  "control-center-width": 400,
-  "control-center-height": 2100,
-  "notification-window-width": 900,
-  "notification-window-height": 2000,
-  "layer-shell-cover-screen": true,
+  "control-center-width": 560,
+  "control-center-height": -1,
+  "fit-to-screen": false,
+  "notification-window-width": 560,
+  "notification-grouping": false,
+  "relative-timestamps": true,
+  "text-empty": "No notifications",
   "notification-icon-size": 64,
   "notification-body-image-height": 100,
   "notification-body-image-width": 200,
@@ -17,7 +20,6 @@
   "timeout": 10,
   "timeout-low": 5,
   "timeout-critical": 30,
-  "fit-to-screen": true,
   "keyboard-shortcuts": true,
   "image-visibility": "when-available",
   "transition-time": 200,
@@ -27,16 +29,24 @@
   "widgets": [
     "title",
     "dnd",
+    "mpris",
     "notifications"
   ],
   "widget-config": {
     "title": {
       "text": "Notifications",
       "clear-all-button": true,
-      "button-text": "Clear All"
+      "button-text": "Clear all"
     },
     "dnd": {
       "text": "Do Not Disturb"
+    },
+    "mpris": {
+      "show-album-art": "when-available",
+      "autohide": true
+    },
+    "notifications": {
+      "vexpand": false
     }
   }
 }
