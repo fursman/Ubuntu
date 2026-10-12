@@ -1,11 +1,24 @@
 #!/bin/bash
 # Lock screen with blurred desktop background (fast)
+#
+# --relock: replace a running gtklock with a fresh one on the same background
+# (lock-relock runs this after a monitor reconnects). SIGKILL, not SIGTERM, so
+# the old client cannot unlock on its way out: Hyprland holds the session
+# locked until the new one takes over (misc:allow_session_lock_restore).
 
 TMPIMG="/tmp/lockscreen-bg.png"
 
-# Downscale to 1/4, blur (much faster), then upscale back
-grim -t png -s 0.25 "$TMPIMG" && \
-    convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
+if [ "$1" = "--relock" ]; then
+    pkill -KILL -x gtklock || exit 0    # not locked, nothing to replace
+    for _ in $(seq 20); do
+        pgrep -x gtklock > /dev/null || break
+        sleep 0.1
+    done
+else
+    # Downscale to 1/4, blur (much faster), then upscale back
+    grim -t png -s 0.25 "$TMPIMG" && \
+        convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
+fi
 
 # gtklock with Dracula-themed style and blurred background
 gtklock -d -s ~/.config/gtklock/style.css -b "$TMPIMG" -H -T 5

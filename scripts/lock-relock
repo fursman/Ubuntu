@@ -1,0 +1,43 @@
+#!/usr/bin/python3 -I
+"""Put the lock screen back after a monitor reconnects while locked.
+
+gtklock draws its lock surface on the outputs that exist when it starts. pile's
+Odyssey G95NC drops off the bus when DPMS turns it off and comes back as a new
+output when it wakes, and gtklock put nothing on it: the session stayed locked
+with no password prompt to type into (2026-10-12). Hyprland announces the
+reconnect on its event socket; if gtklock is running then, `lock-screen
+--relock` swaps in a fresh one that covers every current output.
+
+Started once per session from hyprland.lua; exits with Hyprland.
+"""
+import os
+import select
+import socket
+import subprocess
+
+SETTLE = 2.0    # a waking monitor can drop and return more than once
+
+sock_path = os.path.join(os.environ["XDG_RUNTIME_DIR"], "hypr",
+                         os.environ["HYPRLAND_INSTANCE_SIGNATURE"], ".socket2.sock")
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(sock_path)
+
+buf = b""
+pending = False
+while True:
+    ready, _, _ = select.select([sock], [], [], SETTLE if pending else None)
+    if not ready:
+        # quiet for SETTLE seconds since the last monitor came back
+        pending = False
+        subprocess.run([os.path.expanduser("~/.local/bin/lock-screen"), "--relock"])
+        continue
+    data = sock.recv(4096)
+    if not data:
+        break   # Hyprland is gone
+    buf += data
+    *lines, buf = buf.split(b"\n")
+    for line in lines:
+        event, _, name = line.decode(errors="replace").partition(">>")
+        # FALLBACK is Hyprland's stand-in while no real output is connected
+        if event == "monitoradded" and name != "FALLBACK":
+            pending = True

@@ -97,6 +97,12 @@ hl.config({
         animate_manual_resizes       = true,
         animate_mouse_windowdragging = true,
 
+        -- Let a fresh lock client take over a locked session. gtklock loses its
+        -- surface when a monitor reconnects (pile's Odyssey G95NC does on every
+        -- DPMS wake), leaving the session locked with no password prompt;
+        -- lock-relock then swaps in a new gtklock, which needs this.
+        allow_session_lock_restore   = true,
+
         -- Explicitly off. NVIDIA's DRM KMS driver (595 branch) forces every
         -- VRR-capable display into VRR mode by default, which shows up as
         -- heavy pulsing/flicker in fullscreen. Leaving this at 0 is the fix;
@@ -167,6 +173,7 @@ hl.animation({ leaf = "layers",           enabled = true, speed = 4,  bezier = "
 ----------------------------------------------------------------- AUTOSTART --
 hl.on("hyprland.start", function()
     hl.exec_cmd("~/.local/bin/waybar-launch")
+    hl.exec_cmd("~/.local/bin/lock-relock")
     hl.exec_cmd("~/.local/bin/awww-daemon")
     hl.exec_cmd("sleep 3 && ~/.local/bin/awww img --transition-type center --transition-step 2 --transition-fps 60 ~/Pictures/Wallpapers/current.jpg")
     hl.exec_cmd("swayosd-server")
