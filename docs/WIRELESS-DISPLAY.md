@@ -86,11 +86,12 @@ GND raises the xdg-desktop-portal screencast picker the moment it launches,
 before you have chosen a sink. It has to be answered before streaming can
 start, and it is easy to miss because nothing has visibly happened yet.
 
-Under Hyprland, `input:follow_mouse = 1` means `hyprctl dispatch focuswindow`
-will not actually focus the picker — move the cursor into it first:
+Under Hyprland, `input:follow_mouse = 1` means focusing the picker by
+dispatcher will not stick — move the cursor into it first:
 
 ```bash
-hyprctl dispatch movecursor <x> <y>
+hyprctl dispatch 'hl.dsp.cursor.move({ x = <x>, y = <y> })'   # hyprland.lua
+hyprctl dispatch movecursor <x> <y>                           # hyprland.conf (Hyprland < 0.55)
 ```
 
 ---

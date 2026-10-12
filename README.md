@@ -234,7 +234,8 @@ The status bar shows (left to right):
 │   └── CAPS-SUDO.md               # CapsLock passwordless-sudo toggle, and its sharp edges
 ├── configs/
 │   ├── theme/dracula.css          # THE palette — every stylesheet imports this
-│   ├── hypr/hyprland.conf         # Compositor (sources env-local + polkit-local)
+│   ├── hypr/hyprland.lua          # Compositor (loads env-local, polkit-local, local)
+│   ├── hypr/hyprland.conf         # Same, for Hyprland < 0.55 (hyprlang)
 │   ├── waybar/{config.jsonc,style.css}
 │   ├── kitty/kitty.conf
 │   ├── rofi/{config.rasi,spotlight-dark.rasi}
@@ -293,7 +294,7 @@ Two conventions keep it coherent:
 
 The reference machine is a 17" 3840x2160 panel running at **scale 1.0** (~257
 DPI), so type in the stylesheets is specified deliberately large (19-26px). If
-you set a monitor scale in `hyprland.conf`, divide every px value in the
+you set a monitor scale in `hyprland.lua`, divide every px value in the
 stylesheets by that scale.
 
 ## NVIDIA & Multi-GPU
@@ -325,7 +326,7 @@ Two details worth knowing, both learned the hard way:
 - **Wallpaper**: replace `~/Pictures/Wallpapers/current.jpg`, or cycle the Donut
   variants with `Home`/`End`
 - **GPU config**: `~/.config/hypr/env-local.conf` (never overwritten by redeploys)
-- **Keybinds**: `~/.config/hypr/hyprland.conf`, then `hyprctl reload`
+- **Keybinds**: `~/.config/hypr/hyprland.lua`, then `hyprctl reload`
 - **Waybar modules**: `~/.config/waybar/config.jsonc`, then `pkill -SIGUSR2 waybar`
 
 ## Credits

@@ -4,7 +4,10 @@ set -e
 
 # If looking-glass-client is already running, just focus it
 if pgrep -x looking-glass-c > /dev/null 2>&1; then
-    hyprctl dispatch focuswindow "class:looking-glass-client"
+    # hyprland.conf takes the dispatcher by name; under hyprland.lua that fails
+    # to parse (exit 7) and the dispatcher is a Lua expression instead.
+    hyprctl dispatch focuswindow "class:looking-glass-client" > /dev/null ||
+        hyprctl dispatch 'hl.dsp.focus({ window = "class:looking-glass-client" })'
     exit 0
 fi
 
