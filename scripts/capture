@@ -1,0 +1,101 @@
+#!/bin/bash
+# Screen capture in one place, bound to keys and to the capture menu.
+#   capture screen-clip | screen-file | region-clip | region-file | region-edit
+#           window-clip | window-file | text | qr | color
+#
+# Region grabs freeze the screen first (hyprpicker -z), so a tooltip or video
+# frame holds still while you drag. Screenshots land in ~/Pictures and in the
+# clipboard notification; click "Annotate" on it to open swappy.
+
+DIR="$HOME/Pictures"
+stamp() { date +'%Y-%m-%d-%H-%M-%S'; }
+note() { notify-send -a capture -u low -t 4000 "$@"; }
+
+freeze_start() {
+    command -v hyprpicker >/dev/null || return 0
+    hyprpicker -r -z >/dev/null 2>&1 &
+    FREEZE=$!
+    sleep 0.15
+}
+freeze_stop() { [ -n "$FREEZE" ] && kill "$FREEZE" 2>/dev/null; }
+trap freeze_stop EXIT
+
+region() {
+    freeze_start
+    REGION=$(slurp -d -b '#00000066' -w 2 2>/dev/null)
+    local rc=$?
+    freeze_stop
+    [ $rc -eq 0 ] && [ -n "$REGION" ]
+}
+
+window_geom() {
+    hyprctl activewindow -j | jq -r 'select(.at) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
+}
+
+# Offer "Annotate" on the notification without blocking the caller.
+offer_edit() {
+    local file="$1" title="$2" body="$3"
+    (
+        act=$(notify-send -a capture -u low -t 8000 -i "$file" -A edit=Annotate "$title" "$body" --wait 2>/dev/null)
+        [ "$act" = edit ] && swappy -f "$file"
+    ) </dev/null >/dev/null 2>&1 &
+    disown
+}
+
+shot() {   # shot <clip|file> [geometry]
+    local mode=$1 geom=$2 file
+    if [ "$mode" = file ]; then
+        file="$DIR/Screenshot-$(stamp).png"
+    else
+        file="${XDG_RUNTIME_DIR:-/tmp}/capture-last.png"
+    fi
+    grim ${geom:+-g "$geom"} "$file" || exit 1
+    wl-copy --type image/png < "$file"
+    if [ "$mode" = file ]; then
+        offer_edit "$file" "Screenshot saved" "${file/#$HOME/\~} (also copied)"
+    else
+        offer_edit "$file" "Screenshot copied" "Paste it anywhere"
+    fi
+}
+
+case "$1" in
+    screen-clip) shot clip ;;
+    screen-file) shot file ;;
+    region-clip) region && shot clip "$REGION" ;;
+    region-file) region && shot file "$REGION" ;;
+    window-clip) shot clip "$(window_geom)" ;;
+    window-file) shot file "$(window_geom)" ;;
+    region-edit) region && grim -g "$REGION" - | swappy -f - ;;
+    text)
+        command -v tesseract >/dev/null || { note -u normal "OCR unavailable" "Install tesseract-ocr"; exit 1; }
+        region || exit 0
+        txt=$(grim -g "$REGION" -t png - | tesseract stdin stdout -l "${OCR_LANG:-eng}" 2>/dev/null | sed -e 's/[[:space:]]*$//' -e '/./,$!d')
+        [ -n "$txt" ] || { note "No text found" "Nothing readable in that area"; exit 0; }
+        printf '%s' "$txt" | wl-copy
+        note -i edit-copy "Text copied" "$(head -c 300 <<<"$txt")"
+        ;;
+    qr)
+        command -v zbarimg >/dev/null || { note -u normal "QR reader unavailable" "Install zbar-tools"; exit 1; }
+        region || exit 0
+        code=$(grim -g "$REGION" -t png - | zbarimg -q --raw - 2>/dev/null)
+        [ -n "$code" ] || { note "No QR code found" "Drag around the whole code"; exit 0; }
+        printf '%s' "$code" | wl-copy
+        note -i qrcode "QR code copied" "$(head -c 300 <<<"$code")"
+        ;;
+    color)
+        if command -v hyprpicker >/dev/null; then
+            hex=$(hyprpicker -f hex 2>/dev/null)
+        else
+            pt=$(slurp -p) || exit 0
+            hex=$(grim -g "$pt" -t ppm - | magick - -format '#%[hex:p{0,0}]' info:- 2>/dev/null)
+        fi
+        [ -n "$hex" ] || exit 0
+        printf '%s' "$hex" | wl-copy
+        sw="${XDG_RUNTIME_DIR:-/tmp}/capture-swatch.png"
+        magick -size 96x96 "xc:$hex" "$sw" 2>/dev/null || convert -size 96x96 "xc:$hex" "$sw" 2>/dev/null
+        note -i "$sw" "Colour copied" "$hex"
+        ;;
+    *)
+        echo "usage: capture screen-clip|screen-file|region-clip|region-file|region-edit|window-clip|window-file|text|qr|color" >&2
+        exit 1 ;;
+esac

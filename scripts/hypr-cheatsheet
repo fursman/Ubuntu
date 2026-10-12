@@ -1,65 +1,143 @@
-#!/bin/bash
-# Hyprland Keybind Cheatsheet - displayed in rofi
+#!/usr/bin/python3 -I
+"""Keybinding cheatsheet, generated from the running Hyprland (Super + Space).
 
-cat << 'EOF' | rofi -dmenu -i -theme spotlight-dark -p "Keybinds" -no-custom -markup-rows
-<b>--- Apps ---</b>
-Super + Enter          App Launcher (Rofi)
-Super + T              Terminal (Kitty)
-Super + B              Firefox
-Super + Alt + B        Chromium
-Super + C              Claude
-Super + F              File Manager (Thunar)
-Super + O              Audio Settings
-Super + S              Signal
-Super + R              Pika Backup
-Super + K              Passwords (Seahorse)
-<b>--- Assistant ---</b>
-Super (tap)            Voice Mode On/Off
-Super + A              Conversation Panel
-Super + M              Swap Model
-Super + Shift + V      New Conversation
-<b>--- Windows ---</b>
-Super + Q              Close Window
-Super + Escape         Fullscreen
-Super + Shift + F      Toggle Floating
-Super + Shift + P      Pin (Always on Top)
-Super + Shift + Space  Center Window
-Super + P              Pseudo-tile
-Super + J              Toggle Split
-Super + G              Group/Tab Windows
-Super + Tab            Cycle Grouped Windows
-<b>--- Move / Resize ---</b>
-Super + Arrow          Focus Direction
-Super + Shift + Arrow  Move Window
-Super + Ctrl + Arrow   Resize Window
-Super + Drag LMB       Move Window (Mouse)
-Super + Drag RMB       Resize Window (Mouse)
-<b>--- Workspaces ---</b>
-Super + 1-0            Switch Workspace
-Super + Shift + 1-0    Move to Workspace
-Super + Alt + 1-5      Move Silently
-Super + Scroll          Cycle Workspaces
-3-Finger Swipe         Swipe Workspaces
-<b>--- Scratchpad ---</b>
-Super + `              Dropdown Terminal
-<b>--- Screenshots / Recording ---</b>
-Print                  Full Screen -> Clipboard
-Super + F12            Full Screen -> File
-Super + Shift + S      Region -> Clipboard
-Super + Shift + F12    Region -> File
-Super + Shift + A      Region -> Annotate (Swappy)
-Super + Shift + R      Record Region (toggle)
-Super + Alt + R        Record Full Screen (toggle)
-<b>--- Utilities ---</b>
-Super + V              Clipboard History
-Super + N              Notification Center
-Super + Shift + C      Color Picker
-Super + L              Lock Screen
-Super + X              Logout Menu
-Super + Space          This Cheatsheet
-<b>--- Media ---</b>
-Play/Pause Key         Play / Pause
-Next/Prev Key          Next / Previous Track
-Volume Keys            Volume Up / Down / Mute
-Brightness Keys        Brightness Up / Down
-EOF
+Every bind in hyprland.lua carries a description, "Section › What it does";
+this reads them back with `hyprctl binds -j`, so the help always matches the
+keys. Runs of numbered binds (workspaces 1-10) fold into one line.
+
+    hypr-cheatsheet            show it in rofi (type to filter)
+    hypr-cheatsheet --print    plain text, for a terminal
+    hypr-cheatsheet --markdown tables for the README
+"""
+import json
+import re
+import subprocess
+import sys
+
+MODS = [(64, "Super"), (4, "Ctrl"), (8, "Alt"), (1, "Shift")]
+KEYS = {
+    "RETURN": "Enter", "ESCAPE": "Esc", "space": "Space", "TAB": "Tab",
+    "BACKSPACE": "Backspace", "grave": "`", "period": ".", "slash": "/",
+    "equal": "=", "minus": "-", "left": "←", "right": "→", "up": "↑",
+    "down": "↓", "mouse:272": "Left-drag", "mouse:273": "Right-drag",
+    "mouse_down": "Wheel down", "mouse_up": "Wheel up", "Print": "PrtSc",
+}
+HIDDEN_SECTIONS = {"Hardware keys"}
+ORDER = ["Help", "Apps", "Tools", "Capture", "Windows", "Focus & move", "Layout",
+         "Groups (tabs)", "Workspaces", "Style", "Toggles", "Assistant"]
+
+
+def keyname(b):
+    key = b["key"]
+    if key == "SUPER_L" and b.get("release"):
+        return "Super (tap)"
+    mods = [n for bit, n in MODS if b["modmask"] & bit]
+    k = KEYS.get(key, key.upper() if len(key) == 1 else key)
+    return " + ".join(mods + [k])
+
+
+def collect():
+    out = subprocess.run(["hyprctl", "binds", "-j"], capture_output=True, text=True).stdout
+    sections, seen = {}, set()
+    for b in json.loads(out or "[]"):
+        desc = b.get("description") or ""
+        if " › " not in desc:
+            continue
+        section, what = desc.split(" › ", 1)
+        if section in HIDDEN_SECTIONS:
+            continue
+        keys = keyname(b)
+        # ALT + TAB is bound twice (cycle, then raise); list it once.
+        if (section, keys) in seen:
+            continue
+        seen.add((section, keys))
+        sections.setdefault(section, []).append([keys, what])
+    return {s: fold(rows) for s, rows in sections.items()}
+
+
+ARROWS = {"←": "left", "→": "right", "↑": "up", "↓": "down"}
+
+
+def fold_arrows(rows):
+    """Four binds that differ only by arrow key -> 'Super + ←→↑↓  Focus left/right/up/down'."""
+    groups, order = {}, []
+    for keys, what in rows:
+        arrow = next((a for a in ARROWS if keys.endswith(a)), None)
+        word = ARROWS.get(arrow)
+        if arrow and re.search(rf"\b{word}\b", what):
+            sig = (keys[: -len(arrow)], re.sub(rf"\b{word}\b", "#", what))
+        else:
+            sig = (keys, what)
+        if sig not in groups:
+            groups[sig] = []
+            order.append(sig)
+        groups[sig].append((keys, what))
+    out = []
+    for sig in order:
+        items = groups[sig]
+        if len(items) == 4 and "#" in sig[1]:
+            out.append([sig[0] + "←→↑↓", sig[1].replace("#", "left/right/up/down")])
+        else:
+            out.extend([k, w] for k, w in items)
+    return out
+
+
+def fold(rows):
+    """'Super + 1  Go to workspace 1' ... ten times -> one line."""
+    rows = fold_arrows(rows)
+    groups, order = {}, []
+    for keys, what in rows:
+        sig = (re.sub(r"\b\d+\b", "#", keys), re.sub(r"\b\d+\b", "#", what))
+        if sig not in groups:
+            groups[sig] = []
+            order.append(sig)
+        groups[sig].append((keys, what))
+    folded = []
+    for sig in order:
+        items = groups[sig]
+        if len(items) < 3:
+            folded.extend([k, w] for k, w in items)
+            continue
+        nums = [re.findall(r"\b\d+\b", w)[-1] for _, w in items]
+        keynums = [re.findall(r"\b\d+\b", k)[-1] for k, _ in items]
+        folded.append([sig[0].replace("#", f"{keynums[0]}…{keynums[-1]}"),
+                       sig[1].replace("#", f"{nums[0]}–{nums[-1]}")])
+    return folded
+
+
+def ordered(sections):
+    names = [s for s in ORDER if s in sections] + sorted(s for s in sections if s not in ORDER)
+    return [(s, sections[s]) for s in names]
+
+
+def main():
+    sections = ordered(collect())
+    width = max((len(k) for _, rows in sections for k, _ in rows), default=10) + 3
+    if "--markdown" in sys.argv:
+        for name, rows in sections:
+            print(f"\n### {name}\n\n| Key | Action |\n|-----|--------|")
+            for k, w in rows:
+                print(f"| `{k}` | {w.replace('|', '/')} |")
+        return
+    if "--print" in sys.argv:
+        for name, rows in sections:
+            print(f"\n{name}")
+            for k, w in rows:
+                print(f"  {k.ljust(width)}{w}")
+        return
+    esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    lines, headers = [], []
+    for name, rows in sections:
+        headers.append(str(len(lines)))
+        lines.append(f"<b>── {esc(name)} ──</b>")
+        lines.extend(f"<tt>{esc(k.ljust(width))}</tt>{esc(w)}" for k, w in rows)
+    # Headers as rofi "active" rows: the theme draws those in the accent colour.
+    subprocess.run(["rofi", "-dmenu", "-i", "-markup-rows", "-no-custom", "-p", "Keys",
+                    "-a", ",".join(headers),
+                    "-theme", "spotlight-dark",
+                    "-theme-str", "window { width: 1100px; } listview { lines: 18; }"],
+                   input="\n".join(lines), text=True)
+
+
+if __name__ == "__main__":
+    main()

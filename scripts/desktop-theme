@@ -1,0 +1,570 @@
+#!/usr/bin/python3 -I
+"""Switch the whole desktop to a colour theme.
+
+    desktop-theme list              themes, current one marked
+    desktop-theme set <name>        render every template and reload the apps
+    desktop-theme current           print the current theme's name
+    desktop-theme next | prev       step through the list (wraps)
+    desktop-theme sync              fetch / update the omarchy theme collection
+    desktop-theme wallpapers        the current theme's wallpapers, one per line
+    desktop-theme menu-themes       items for desktop-menu (with previews)
+    desktop-theme menu-wallpapers   items for desktop-menu (with thumbnails)
+    desktop-theme reapply           render the current theme again (setup.sh)
+
+A theme is a directory holding `colors.toml` in omarchy's format, so every
+omarchy theme (https://github.com/basecamp/omarchy/tree/master/themes) and the
+community ones built for it work unchanged. Optional extras in that directory:
+`backgrounds/` (wallpapers, used while the theme is on) and `icons.theme` (a
+Yaru accent such as "Yaru-purple", which also picks the GTK theme).
+
+Themes are looked up, first match wins, in:
+    ~/.config/desktop-theme/themes/<name>       your own
+    ~/.local/share/desktop-theme/themes/<name>  shipped by this repo (dracula)
+    ~/.local/share/desktop-theme/omarchy/themes/<name>   `desktop-theme sync`
+
+Templates are plain files with {{ placeholders }}. Each starts with one or more
+`{{! dest: <path> }}` lines naming where the rendered file goes, so adding a
+themed app is adding a template, not editing this script. Shipped templates live
+in ~/.local/share/desktop-theme/templates; a same-named file in
+~/.config/desktop-theme/templates replaces one, and new names add to them.
+
+Placeholders: {{ key }} (#rrggbb), {{ key_strip }} (rrggbb), {{ key_rgb }}
+(r, g, b), {{ mix a b 0.3 }} (a blended 30% towards b; a and b are keys or
+#hex), plus mode ("dark"/"light"), gtk_theme, icon_theme and theme_name.
+"""
+import hashlib
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+DATA = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state"))
+
+USER_DIR = CONFIG / "desktop-theme"
+SHARE_DIR = DATA / "desktop-theme"
+STATE_DIR = STATE / "desktop-theme"
+CURRENT_FILE = STATE_DIR / "current"
+OMARCHY_DIR = SHARE_DIR / "omarchy"
+OMARCHY_URL = "https://github.com/basecamp/omarchy.git"
+DEFAULT_THEME = "dracula"
+
+THEME_ROOTS = [USER_DIR / "themes", SHARE_DIR / "themes", OMARCHY_DIR / "themes"]
+TEMPLATE_ROOTS = [SHARE_DIR / "templates", USER_DIR / "templates"]   # later wins
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+# --------------------------------------------------------------- colours ----
+def hex_to_rgb(h):
+    h = h.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb_to_hex(rgb):
+    return "#" + "".join(f"{max(0, min(255, round(c))):02x}" for c in rgb)
+
+
+def mix(a, b, amount):
+    """a moved `amount` (0..1) of the way towards b."""
+    ra, rb = hex_to_rgb(a), hex_to_rgb(b)
+    return rgb_to_hex([x + (y - x) * amount for x, y in zip(ra, rb)])
+
+
+def luminance(h):
+    def chan(c):
+        c /= 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (chan(c) for c in hex_to_rgb(h))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+HEX_RE = re.compile(r"^#?[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{3}$")
+
+
+def is_hex(v):
+    return isinstance(v, str) and bool(HEX_RE.match(v))
+
+
+def resolve(raw):
+    """omarchy's colors.toml -> the full key set templates can use.
+
+    Mirrors omarchy-theme-color's derivations so a theme renders the same here
+    as there: missing shades are mixed from the base colours, and legacy names
+    (bg, fg, color0..15) are accepted on the way in.
+    """
+    c = {k: (v if not is_hex(v) or v.startswith("#") else "#" + v) for k, v in raw.items()}
+    legacy = {"bg": "background", "fg": "foreground", "dark_bg": "dark_background",
+              "darker_bg": "darker_background", "lighter_bg": "lighter_background",
+              "dark_fg": "dark_foreground", "light_fg": "light_foreground",
+              "bright_fg": "bright_foreground", "purple": "magenta",
+              "bright_purple": "bright_magenta"}
+    for old, new in legacy.items():
+        if old in c and new not in c:
+            c[new] = c[old]
+    ansi = ["background", "red", "green", "yellow", "blue", "magenta", "cyan", "foreground",
+            "muted", "bright_red", "bright_green", "bright_yellow", "bright_blue",
+            "bright_magenta", "bright_cyan", "bright_foreground"]
+    for i, name in enumerate(ansi):
+        if f"color{i}" in c and name not in c:
+            c[name] = c[f"color{i}"]
+
+    c.setdefault("background", "#1e1e2e")
+    c.setdefault("foreground", "#cdd6f4")
+    bg, fg = c["background"], c["foreground"]
+    for name, fallback in (("red", "#e06c75"), ("green", "#98c379"), ("yellow", "#e5c07b"),
+                           ("blue", "#61afef"), ("magenta", "#c678dd"), ("cyan", "#56b6c2")):
+        c.setdefault(name, fallback)
+    c.setdefault("orange", c["yellow"])
+    c.setdefault("brown", mix(c["orange"], "#000000", 0.5))
+    c.setdefault("accent", c["blue"])
+    c.setdefault("dark_background", mix(bg, "#000000", 0.25))
+    c.setdefault("darker_background", mix(bg, "#000000", 0.5))
+    c.setdefault("lighter_background", mix(bg, fg, 0.12))
+    c.setdefault("selection", c.get("selection_background", mix(bg, fg, 0.2)))
+    c.setdefault("dark_foreground", mix(fg, bg, 0.45))
+    c.setdefault("light_foreground", mix(fg, "#ffffff", 0.1))
+    c.setdefault("bright_foreground", mix(fg, "#ffffff", 0.2))
+    c.setdefault("muted", c.get("color8", c["dark_foreground"]))
+    for name in ("red", "green", "yellow", "blue", "magenta", "cyan"):
+        c.setdefault(f"bright_{name}", mix(c[name], "#ffffff", 0.2))
+    c.setdefault("bright_orange", mix(c["orange"], "#ffffff", 0.2))
+
+    if "mode" not in c:
+        c["mode"] = "light" if sum(hex_to_rgb(bg)) > 382 else "dark"
+    c.setdefault("selection_background", c["selection"])
+    c.setdefault("selection_foreground", c["bright_foreground"])
+    c.setdefault("cursor", c["bright_foreground"])
+    # Text drawn ON an accent fill (selected rows, active buttons): whichever of
+    # the theme's background or foreground reads better against the accent.
+    c["on_accent"] = bg if contrast(c["accent"], bg) >= contrast(c["accent"], fg) else fg
+    for i, name in enumerate(ansi):
+        c.setdefault(f"color{i}", c[name])
+    return c
+
+
+def gradient(spec, fallback):
+    """hyprland_active_border may be "rgba(..) rgba(..) 45deg" -> Lua table."""
+    if not spec:
+        return f'"rgba({fallback.lstrip("#")}ee)"'
+    parts = spec.split()
+    angle = None
+    if parts and parts[-1].endswith("deg"):
+        angle = parts.pop()[:-3]
+    cols = []
+    for p in parts:
+        if is_hex(p):
+            p = f"rgba({p.lstrip('#')}ee)"
+        cols.append(f'"{p}"')
+    if len(cols) == 1 and angle is None:
+        return cols[0]
+    return "{ colors = { " + ", ".join(cols) + " }" + (f", angle = {angle}" if angle else "") + " }"
+
+
+# ---------------------------------------------------------------- themes ----
+def theme_dirs():
+    seen = {}
+    for root in THEME_ROOTS:
+        if root.is_dir():
+            for d in sorted(root.iterdir()):
+                if (d / "colors.toml").is_file() and d.name not in seen:
+                    seen[d.name] = d
+    return seen
+
+
+def find_theme(name):
+    dirs = theme_dirs()
+    if name in dirs:
+        return dirs[name]
+    sys.exit(f"desktop-theme: no theme named '{name}' (try: desktop-theme list"
+             + ("" if OMARCHY_DIR.exists() else ", or desktop-theme sync for omarchy's") + ")")
+
+
+def current_name():
+    try:
+        return CURRENT_FILE.read_text().strip() or DEFAULT_THEME
+    except OSError:
+        return DEFAULT_THEME
+
+
+def backgrounds(theme_dir):
+    d = theme_dir / "backgrounds"
+    if not d.is_dir():
+        return []
+    return sorted(p for p in d.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXT)
+
+
+def icon_choice(theme_dir, mode):
+    """GTK + icon theme. Dracula keeps its own; everything else gets the Yaru
+    accent the theme names (Ubuntu ships every one omarchy uses)."""
+    if theme_dir.name == "dracula" and (HOME / ".themes/Dracula").is_dir():
+        return "Dracula", ("Dracula" if (HOME / ".icons/Dracula").is_dir() else "Yaru-purple")
+    icons = "Yaru"
+    f = theme_dir / "icons.theme"
+    if f.is_file():
+        # Some omarchy themes ship the name without a trailing newline twice over
+        # ("Yaru-blueYaru-blue"); the first Yaru-* name is the intended one.
+        m = re.match(r"\s*(Yaru(?:-[a-z]+)?)", f.read_text())
+        if m:
+            icons = m.group(1)
+    if not Path(f"/usr/share/icons/{icons}").is_dir():
+        icons = "Yaru"
+    gtk = icons + ("-dark" if mode == "dark" else "")
+    if not Path(f"/usr/share/themes/{gtk}").is_dir():
+        gtk = "Yaru-dark" if mode == "dark" else "Yaru"
+    return gtk, icons
+
+
+# ------------------------------------------------------------- templates ----
+PLACEHOLDER = re.compile(r"\{\{\s*(.+?)\s*\}\}")
+
+
+def render(text, ctx):
+    def sub(m):
+        expr = m.group(1)
+        if expr.startswith("!"):
+            return ""
+        parts = expr.split()
+        if parts[0] in ("mix", "mix_strip") and len(parts) == 4:
+            a = ctx.get(parts[1], parts[1])
+            b = ctx.get(parts[2], parts[2])
+            amt = float(parts[3].rstrip("%")) / (100 if parts[3].endswith("%") else 1)
+            out = mix(a, b, amt)
+            return out.lstrip("#") if parts[0] == "mix_strip" else out
+        key = parts[0]
+        for suffix, fn in (("_strip", lambda v: v.lstrip("#")),
+                           ("_rgb", lambda v: ", ".join(str(x) for x in hex_to_rgb(v)))):
+            if key.endswith(suffix) and key[: -len(suffix)] in ctx:
+                return fn(ctx[key[: -len(suffix)]])
+        if key in ctx:
+            return str(ctx[key])
+        raise KeyError(key)
+    return PLACEHOLDER.sub(sub, text)
+
+
+DEST_RE = re.compile(r"^\{\{!\s*dest:\s*(.+?)\s*\}\}\s*$", re.M)
+
+
+def templates():
+    found = {}
+    for root in TEMPLATE_ROOTS:
+        if root.is_dir():
+            for f in sorted(root.glob("*.tpl")):
+                found[f.name] = f
+    return found.values()
+
+
+def write_if_changed(path, text):
+    try:
+        if path.read_text() == text:
+            return False
+    except OSError:
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+    return True
+
+
+# --------------------------------------------------------------- reloads ----
+def run(*cmd, timeout=10, **kw):
+    try:
+        return subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              timeout=timeout, **kw).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def have(cmd):
+    return shutil.which(cmd) is not None
+
+
+def session_env():
+    """hyprctl/swaync-client need the session's sockets; over ssh or from a
+    systemd unit they are not in our environment. A live Hyprland instance is
+    one whose hyprland.lock names a running PID; the lock also names its
+    Wayland socket. (Dead instances leave their directories behind.)"""
+    env = dict(os.environ)
+    rt = env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    hypr = Path(rt) / "hypr"
+    if "HYPRLAND_INSTANCE_SIGNATURE" not in env and hypr.is_dir() and "SWAYSOCK" not in env:
+        for sig in sorted(hypr.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                pid, sock = (sig / "hyprland.lock").read_text().split()[:2]
+            except (OSError, ValueError):
+                continue
+            if Path(f"/proc/{pid}").exists():
+                env["HYPRLAND_INSTANCE_SIGNATURE"] = sig.name
+                env.setdefault("WAYLAND_DISPLAY", sock)
+                break
+    if "WAYLAND_DISPLAY" not in env:
+        socks = sorted(p.name for p in Path(rt).glob("wayland-[0-9]*") if re.fullmatch(r"wayland-\d+", p.name))
+        if socks:
+            env["WAYLAND_DISPLAY"] = socks[0]
+    return env
+
+
+def session_pids(name, env):
+    """PIDs of `name` running in THIS graphical session (same Wayland socket),
+    so a theme change never pokes another login's or a test session's apps."""
+    r = subprocess.run(["pgrep", "-u", str(os.getuid()), "-x", name], capture_output=True, text=True)
+    want = env.get("WAYLAND_DISPLAY")
+    pids = []
+    for pid in r.stdout.split():
+        try:
+            penv = dict(kv.split("=", 1) for kv in
+                        Path(f"/proc/{pid}/environ").read_text(errors="replace").split("\0") if "=" in kv)
+        except OSError:
+            continue
+        if want is None or penv.get("WAYLAND_DISPLAY") in (want, None):
+            pids.append(int(pid))
+    return pids
+
+
+def signal_session(name, sig, env):
+    for pid in session_pids(name, env):
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            pass
+
+
+def reload_apps(ctx, wallpaper):
+    import signal
+    env = session_env()
+    if not env.get("WAYLAND_DISPLAY"):
+        return    # no session (first install): everything reads the files at login
+    if env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        run("hyprctl", "reload", env=env)
+    signal_session("waybar", signal.SIGUSR2, env)        # waybar: reload config + style
+    run("swaync-client", "-rs", "-sw", env=env)
+    signal_session("kitty", signal.SIGUSR1, env)         # kitty: re-read kitty.conf
+    osd = session_pids("swayosd-server", env)            # reads its CSS only at start
+    if osd:
+        for pid in osd:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+        subprocess.Popen(["setsid", "-f", "swayosd-server"], env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    gs = "org.gnome.desktop.interface"
+    run("gsettings", "set", gs, "color-scheme", "prefer-dark" if ctx["mode"] == "dark" else "prefer-light", env=env)
+    run("gsettings", "set", gs, "gtk-theme", ctx["gtk_theme"], env=env)
+    run("gsettings", "set", gs, "icon-theme", ctx["icon_theme"], env=env)
+    if wallpaper:
+        run(str(HOME / ".local/bin/wallpaper-set"), str(wallpaper), env=env)
+
+
+# -------------------------------------------------------------- commands ----
+def apply(name, quiet=False, reload=True):
+    tdir = find_theme(name)
+    raw = tomllib.loads((tdir / "colors.toml").read_text())
+    ctx = resolve(raw)
+    ctx["theme_name"] = name
+    ctx["gtk_theme"], ctx["icon_theme"] = icon_choice(tdir, ctx["mode"])
+    ctx["prefer_dark"] = 1 if ctx["mode"] == "dark" else 0
+    ctx["hypr_active_border"] = gradient(raw.get("hyprland_active_border"), ctx["accent"])
+    ctx["hypr_inactive_border"] = gradient(raw.get("hyprland_inactive_border"),
+                                           mix(ctx["background"], ctx["foreground"], 0.25))
+
+    written = 0
+    for tpl in templates():
+        text = tpl.read_text()
+        dests = DEST_RE.findall(text)
+        if not dests:
+            print(f"desktop-theme: {tpl.name} has no {{{{! dest: ... }}}} line, skipped", file=sys.stderr)
+            continue
+        try:
+            out = render(DEST_RE.sub("", text).lstrip("\n"), ctx)
+        except KeyError as e:
+            print(f"desktop-theme: {tpl.name}: unknown placeholder {e}", file=sys.stderr)
+            continue
+        for d in dests:
+            written += write_if_changed(Path(os.path.expanduser(d)), out)
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    previous = current_name()
+    CURRENT_FILE.write_text(name + "\n")
+
+    # A theme with wallpapers of its own puts its first one up when chosen.
+    # Re-rendering the same theme (reapply, setup.sh) leaves the wallpaper alone.
+    bgs = backgrounds(tdir)
+    wallpaper = bgs[0] if bgs and previous != name else None
+    if reload:
+        reload_apps(ctx, wallpaper)
+    if not quiet:
+        print(f"{name}: {written} file(s) updated")
+    return ctx
+
+
+def cmd_list():
+    cur = current_name()
+    for name, d in theme_dirs().items():
+        try:
+            mode = resolve(tomllib.loads((d / "colors.toml").read_text()))["mode"]
+        except (OSError, tomllib.TOMLDecodeError):
+            mode = "?"
+        print(f"{'*' if name == cur else ' '} {name}\t{mode}\t{d}")
+
+
+def cmd_step(delta):
+    names = list(theme_dirs())
+    cur = current_name()
+    i = names.index(cur) if cur in names else -1
+    name = names[(i + delta) % len(names)]
+    apply(name)
+    notify(f"Theme: {name}")
+
+
+def notify(msg):
+    run("notify-send", "-a", "desktop-theme", "-u", "low", "-t", "2500", "-i", "preferences-desktop-theme", msg,
+        env=session_env())
+
+
+def cmd_sync():
+    SHARE_DIR.mkdir(parents=True, exist_ok=True)
+    git = ["git", "-C", str(OMARCHY_DIR)]
+    # One sync at a time (the menu and setup.sh can both start one). Holding
+    # that lock, any git *.lock left in the checkout is from a run that was
+    # killed half way through the ~280 MB download, so it is safe to clear.
+    import fcntl
+    lockf = open(SHARE_DIR / ".sync.lock", "w")
+    try:
+        fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit("desktop-theme: a theme sync is already running")
+    if (OMARCHY_DIR / ".git").is_dir():
+        for stale in (OMARCHY_DIR / ".git").rglob("*.lock"):
+            stale.unlink(missing_ok=True)
+        # A first clone killed half way has .git but no commit: start over.
+        if not run(*git, "rev-parse", "-q", "--verify", "HEAD"):
+            shutil.rmtree(OMARCHY_DIR)
+    if (OMARCHY_DIR / ".git").is_dir():
+        ok = (run(*git, "sparse-checkout", "set", "themes", timeout=None)
+              and run(*git, "pull", "--ff-only", "-q", timeout=None))
+    else:
+        # Sparse + blobless: only themes/ is checked out (~280 MB of
+        # wallpapers), not the rest of the distribution.
+        ok = (run("git", "clone", "-q", "--depth", "1", "--filter=blob:none", "--sparse",
+                  OMARCHY_URL, str(OMARCHY_DIR), timeout=None)
+              and run(*git, "sparse-checkout", "set", "themes", timeout=None))
+    if not ok:
+        sys.exit("desktop-theme: fetching omarchy's themes failed")
+    print(f"{len(theme_dirs())} themes available")
+
+
+def thumbnail(img):
+    """A small cached copy for the menu: rofi decoding a dozen 4K images on
+    every open is slow, a 320 px thumbnail is instant."""
+    cache = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "desktop-theme/thumbs"
+    st = img.stat()
+    key = hashlib.sha1(f"{img}:{st.st_mtime_ns}:{st.st_size}".encode()).hexdigest() + ".jpg"
+    out = cache / key
+    if not out.exists():
+        cache.mkdir(parents=True, exist_ok=True)
+        tool = "magick" if have("magick") else "convert"
+        if not run(tool, f"{img}[0]", "-thumbnail", "480x270^", "-gravity", "center",
+                   "-extent", "480x270", "-quality", "85", str(out)):
+            return img
+    return out
+
+
+def swatch(theme_dir):
+    """Preview for a theme that ships no preview.png: its background with a
+    stripe of each hue and the accent, cached like the thumbnails."""
+    ctx = resolve(tomllib.loads((theme_dir / "colors.toml").read_text()))
+    cache = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "desktop-theme/thumbs"
+    key = hashlib.sha1((theme_dir.name + str(sorted(ctx.items()))).encode()).hexdigest()
+    out = cache / f"swatch-{key}.png"
+    if out.exists():
+        return out
+    cache.mkdir(parents=True, exist_ok=True)
+    hues = ["red", "orange", "yellow", "green", "cyan", "blue", "magenta"]
+    draw = []
+    for i, h in enumerate(hues):
+        x = 40 + i * 58
+        draw += ["-fill", ctx[h], "-draw", f"roundrectangle {x},150 {x + 46},230 8,8"]
+    draw += ["-fill", ctx["accent"], "-draw", "roundrectangle 40,40 440,110 12,12",
+             "-fill", ctx["foreground"], "-draw", "roundrectangle 40,124 300,136 4,4"]
+    tool = "magick" if have("magick") else "convert"
+    if run(tool, "-size", "480x270", f"xc:{ctx['background']}", *draw, str(out)):
+        return out
+    return None
+
+
+def parallel(fn, items):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
+        return list(ex.map(fn, items))
+
+
+def cmd_menu_themes():
+    cur = current_name()
+    themes = list(theme_dirs().items())
+
+    def preview(item):
+        d = item[1]
+        p = d / "preview.png"
+        return thumbnail(p) if p.is_file() else swatch(d)
+
+    for (name, d), img in zip(themes, parallel(preview, themes)):
+        label = name.replace("-", " ").title()
+        print(f"{label}\tdesktop-theme set {shlex.quote(name)}\t{img or ''}\t{'current' if name == cur else ''}")
+
+
+def cmd_menu_wallpapers():
+    pool = backgrounds(find_theme(current_name()))
+    pics = HOME / "Pictures/Wallpapers"
+    if pics.is_dir():
+        pool += sorted(p for p in pics.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXT
+                       and not p.name.startswith("current."))
+    now = (STATE_DIR / "wallpaper").resolve() if (STATE_DIR / "wallpaper").exists() else None
+    for img, thumb in zip(pool, parallel(thumbnail, pool)):
+        label = img.stem.replace("-", " ").replace("_", " ")
+        where = "theme" if img.parent.name == "backgrounds" else img.parent.name
+        mark = "current" if now and img.resolve() == now else where
+        print(f"{label}\twallpaper-set {shlex.quote(str(img))}\t{thumb}\t{mark}")
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else "list"
+    if cmd == "list":
+        cmd_list()
+    elif cmd == "current":
+        print(current_name())
+    elif cmd == "set" and len(argv) == 3:
+        apply(argv[2])
+        notify(f"Theme: {argv[2]}")
+    elif cmd == "reapply":
+        apply(current_name(), quiet="-q" in argv, reload="--no-reload" not in argv)
+    elif cmd in ("next", "prev"):
+        cmd_step(1 if cmd == "next" else -1)
+    elif cmd == "sync":
+        cmd_sync()
+    elif cmd == "menu-themes":
+        cmd_menu_themes()
+    elif cmd == "menu-wallpapers":
+        cmd_menu_wallpapers()
+    elif cmd == "wallpapers":
+        for p in backgrounds(find_theme(current_name())):
+            print(p)
+    else:
+        sys.exit(__doc__.split("\n\n")[1])
+
+
+if __name__ == "__main__":
+    main(sys.argv)

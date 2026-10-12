@@ -1,0 +1,223 @@
+#!/usr/bin/python3 -I
+"""The system menu (Super + Alt + Space): one searchable place for capture,
+toggles, themes, wallpapers, setup, updates and power.
+
+    desktop-menu              open at the top
+    desktop-menu <id>         open a submenu directly (capture, toggle, theme,
+                              wallpaper, system, ...); keys bind to these
+
+The tree is data: ~/.config/desktop-menu/menu.json (shipped by setup.sh).
+~/.config/desktop-menu/local.json is yours and never overwritten: a menu id
+in it adds items to that menu (or, with "replace": true, replaces it), and new
+ids add new menus. Item fields:
+
+    label      text shown                    icon      Nerd Font glyph
+    exec       shell command to run          menu      submenu id to open
+    when       shell test; item hidden unless it succeeds
+    state      shell command printing a short status (on/off/...), shown at
+               the right; menus with stateful items reopen after a choice
+    confirm    ask "are you sure" first      input     prompt for text, passed
+                                                       to exec as $INPUT
+    generate   shell command printing one item per line as
+               label<TAB>exec[<TAB>icon-or-image[<TAB>state]]
+
+Esc goes back one level.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "desktop-menu"
+BIN = HOME / ".local/bin"
+ENV = dict(os.environ, PATH=f"{BIN}:{os.environ.get('PATH', '/usr/bin:/bin')}")
+ROFI_THEME = "spotlight-dark"
+
+
+def load():
+    menus = json.loads((CONF / "menu.json").read_text())
+    local = CONF / "local.json"
+    if local.is_file():
+        try:
+            extra = json.loads(local.read_text())
+        except json.JSONDecodeError as e:
+            notify("desktop-menu: local.json is not valid JSON", str(e))
+            extra = {}
+        for mid, m in extra.items():
+            if mid in menus and not m.get("replace"):
+                menus[mid]["items"] = menus[mid].get("items", []) + m.get("items", [])
+                if "title" in m:
+                    menus[mid]["title"] = m["title"]
+            else:
+                menus[mid] = m
+    return menus
+
+
+def sh(cmd, capture=True, timeout=5, env=None):
+    try:
+        r = subprocess.run(["bash", "-c", cmd], capture_output=capture, text=True,
+                           timeout=timeout, env=env or ENV)
+        return r.returncode, (r.stdout or "").strip()
+    except subprocess.TimeoutExpired:
+        return 1, ""
+
+
+def notify(title, body=""):
+    subprocess.run(["notify-send", "-a", "desktop-menu", "-u", "low", title, body], env=ENV)
+
+
+def esc(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def rofi(prompt, rows, icons=False, extra=None, message=None):
+    """rows: [(markup_text, icon_path_or_None)]. Returns index or None."""
+    args = ["rofi", "-dmenu", "-i", "-markup-rows", "-format", "i", "-p", prompt,
+            "-theme", ROFI_THEME, "-no-custom"]
+    if icons:
+        args += ["-show-icons"]
+    if message:
+        args += ["-mesg", message]
+    args += extra or []
+    data = []
+    for text, icon in rows:
+        data.append(text + (f"\0icon\x1f{icon}" if icon else ""))
+    r = subprocess.run(args, input="\n".join(data), capture_output=True, text=True, env=ENV)
+    if r.returncode < 0:
+        sys.exit(0)     # rofi was killed: the menu key pressed again closes everything
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    return int(r.stdout.strip())
+
+
+def ask(prompt, hint=""):
+    r = subprocess.run(["rofi", "-dmenu", "-p", prompt, "-theme", ROFI_THEME,
+                        "-theme-str", "listview { enabled: false; }", "-mesg", hint],
+                       input="", capture_output=True, text=True, env=ENV)
+    if r.returncode < 0:
+        sys.exit(0)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def confirm(label):
+    return rofi(f"{label}?", [("󰄬  Yes", None), ("󰅖  No", None)],
+                extra=["-theme-str", "listview { lines: 2; }"]) == 0
+
+
+def expand(menu):
+    """Static items plus generated ones, with `when` filtering and state."""
+    items = []
+    for it in menu.get("items", []):
+        if "generate" in it:
+            # Generous: the first wallpaper/theme listing makes thumbnails.
+            _, out = sh(it["generate"], timeout=120)
+            for line in out.splitlines():
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                g = {"label": parts[0], "exec": parts[1], "stay": it.get("stay", False)}
+                if len(parts) > 2 and parts[2]:
+                    if "/" in parts[2]:
+                        g["image"] = parts[2]
+                    else:
+                        g["icon"] = parts[2]
+                if len(parts) > 3:
+                    g["state_text"] = parts[3]
+                items.append(g)
+            continue
+        if "when" in it and sh(it["when"])[0] != 0:
+            continue
+        it = dict(it)
+        if "state" in it:
+            it["state_text"] = sh(it["state"])[1]
+        items.append(it)
+    return items
+
+
+def row(it):
+    icon = it.get("icon", "")
+    label = esc(it["label"])
+    state = it.get("state_text", "")
+    if state:
+        on = state.lower() in ("on", "yes", "enabled", "active", "current", "✓")
+        tint = "" if on else " alpha='55%'"
+        label += f"  <span{tint} size='smaller'>{esc(state)}</span>"
+    if "menu" in it:
+        label += "  <span alpha='45%'>›</span>"
+    text = f"{icon}  {label}" if icon else label
+    return text, it.get("image")
+
+
+def run(it):
+    cmd = it["exec"]
+    env = ENV
+    if it.get("input"):
+        val = ask(it["label"], it.get("input") if isinstance(it.get("input"), str) else "")
+        if not val:
+            return False
+        env = dict(ENV, INPUT=val)
+    if it.get("confirm") and not confirm(it["label"]):
+        return False
+    if it.get("stay"):
+        sh(cmd, capture=False, timeout=20, env=env)
+    else:
+        subprocess.Popen(["setsid", "-f", "bash", "-c", cmd], env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    return True
+
+
+def show(menus, mid):
+    """Show menu `mid`; returns when the user leaves it (Esc) or ran a command."""
+    while True:
+        menu = menus.get(mid)
+        if not menu:
+            notify("desktop-menu", f"no menu named '{mid}'")
+            return "done"
+        items = expand(menu)
+        if not items:
+            notify(menu.get("title", mid), menu.get("empty", "Nothing here"))
+            return "back"
+        rows = [row(it) for it in items]
+        has_images = any(img for _, img in rows)
+        extra = list(menu.get("rofi", []))
+        if has_images:
+            extra += ["-theme-str", "element-icon { size: 10em; } element { padding: 8px 14px; spacing: 20px; } "
+                                    "listview { lines: 5; } window { width: 1000px; }"]
+        current = next((i for i, it in enumerate(items) if it.get("state_text") == "current"), None)
+        if current is not None:
+            extra += ["-selected-row", str(current)]
+        choice = rofi(menu.get("title", mid), rows, icons=has_images, extra=extra,
+                      message=menu.get("message"))
+        if choice is None:
+            return "back"
+        it = items[choice]
+        if "menu" in it:
+            if show(menus, it["menu"]) == "done":
+                return "done"
+            continue
+        ran = run(it)
+        if ran and it.get("stay"):
+            continue
+        if ran:
+            return "done"
+
+
+def main():
+    # One menu at a time: pressing the key while it is open (at any depth, or
+    # while it is busy making thumbnails) closes it instead of opening another.
+    import fcntl
+    lock = open(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "desktop-menu.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        subprocess.run(["pkill", "-u", str(os.getuid()), "-x", "rofi"])
+        return
+    menus = load()
+    start = sys.argv[1] if len(sys.argv) > 1 else "root"
+    show(menus, start)
+
+
+if __name__ == "__main__":
+    main()

@@ -28,18 +28,16 @@
   "script-fail-notify": true,
   "widgets": [
     "title",
-    "dnd",
+    "buttons-grid",
+    "volume",
     "mpris",
     "notifications"
   ],
   "widget-config": {
     "title": {
-      "text": "Notifications",
+      "text": "Quick settings",
       "clear-all-button": true,
-      "button-text": "Clear all"
-    },
-    "dnd": {
-      "text": "Do Not Disturb"
+      "button-text": "Clear notifications"
     },
     "mpris": {
       "show-album-art": "when-available",
@@ -47,6 +45,79 @@
     },
     "notifications": {
       "vexpand": false
+    },
+    "buttons-grid": {
+      "buttons-per-row": 6,
+      "actions": [
+        {
+          "label": "󰖩",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings wifi set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings wifi state'"
+        },
+        {
+          "label": "󰂯",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings bluetooth set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings bluetooth state'"
+        },
+        {
+          "label": "󰍬",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings mic set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings mic state'"
+        },
+        {
+          "label": "󰖔",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings nightlight set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings nightlight state'"
+        },
+        {
+          "label": "󰅶",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings stay-awake set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings stay-awake state'"
+        },
+        {
+          "label": "󰂛",
+          "type": "toggle",
+          "command": "sh -c '~/.local/bin/quick-settings dnd set'",
+          "update-command": "sh -c '~/.local/bin/quick-settings dnd state'"
+        },
+        {
+          "label": "󰹑",
+          "command": "sh -c 'swaync-client -cp -sw >/dev/null; sleep 0.35; ~/.local/bin/capture region-clip'"
+        },
+        {
+          "label": "󰑊",
+          "command": "sh -c 'swaync-client -cp -sw >/dev/null; sleep 0.35; ~/.local/bin/screenrecord region'"
+        },
+        {
+          "label": "󰏘",
+          "command": "sh -c 'swaync-client -cp -sw >/dev/null; sleep 0.35; ~/.local/bin/desktop-menu theme'"
+        },
+        {
+          "label": "󰸉",
+          "command": "sh -c '~/.local/bin/wallpaper-cycle next'"
+        },
+        {
+          "label": "󰌾",
+          "command": "sh -c 'swaync-client -cp -sw >/dev/null; sleep 0.35; ~/.local/bin/lock-screen'"
+        },
+        {
+          "label": "󰐥",
+          "command": "sh -c 'swaync-client -cp -sw >/dev/null; sleep 0.35; ~/.local/bin/desktop-menu system'"
+        }
+      ]
+    },
+    "volume": {
+      "label": "󰕾",
+      "show-per-app": true,
+      "show-per-app-label": true,
+      "expand-button-label": "󰅀",
+      "collapse-button-label": "󰅃",
+      "empty-list-label": "Nothing playing"
     }
   }
 }

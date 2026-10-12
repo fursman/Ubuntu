@@ -1,0 +1,60 @@
+#!/bin/bash
+# Start or stop a screen recording.
+#   screenrecord region|screen [desktop|mic|none]    start (or stop, if running)
+#   screenrecord stop | status
+#
+# Audio: desktop = what you hear (the default sink's monitor), mic = the
+# default input, none = silent (default). Files go to ~/Videos. The bar shows a
+# red recording pill while it runs; click it to stop.
+
+DIR="$HOME/Videos"
+STATE="${XDG_RUNTIME_DIR:-/tmp}/screenrecord.file"
+refresh_bar() { pkill -RTMIN+8 -x waybar 2>/dev/null; }
+
+stop() {
+    pkill -INT -x wf-recorder || return 1
+    for _ in $(seq 50); do pgrep -x wf-recorder >/dev/null || break; sleep 0.1; done
+    refresh_bar
+    f=$(cat "$STATE" 2>/dev/null); rm -f "$STATE"
+    notify-send -a screenrecord -u low -i video-x-generic "Recording saved" "${f/#$HOME/\~}"
+}
+
+case "$1" in
+    status)
+        if pgrep -x wf-recorder >/dev/null; then
+            printf '{"text":"󰑋 REC","tooltip":"Recording — click to stop","class":"recording"}\n'
+        else
+            echo '{"text":""}'
+        fi
+        exit 0 ;;
+    stop) stop; exit ;;
+esac
+
+pgrep -x wf-recorder >/dev/null && { stop; exit; }
+
+mkdir -p "$DIR"
+file="$DIR/Recording-$(date +'%Y-%m-%d-%H-%M-%S').mp4"
+args=(-f "$file")
+case "$1" in
+    region) g=$(slurp -d) || exit 0; args+=(-g "$g") ;;
+    screen) args+=(-o "$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')") ;;
+    *) echo "usage: screenrecord region|screen [desktop|mic|none] | stop | status" >&2; exit 1 ;;
+esac
+case "${2:-none}" in
+    desktop) args+=(--audio="$(pactl get-default-sink).monitor") ;;
+    mic)     args+=(--audio="$(pactl get-default-source)") ;;
+esac
+
+echo "$file" > "$STATE"
+log="${XDG_RUNTIME_DIR:-/tmp}/screenrecord.log"
+wf-recorder "${args[@]}" >"$log" 2>&1 &
+sleep 0.7
+if ! kill -0 $! 2>/dev/null; then
+    rm -f "$STATE"
+    notify-send -a screenrecord -u critical "Recording failed" "$(tail -3 "$log")"
+    exit 1
+fi
+refresh_bar
+notify-send -a screenrecord -u low -t 2000 -i media-record "Recording" "Press the same keys again, or click the bar pill, to stop"
+wait
+refresh_bar

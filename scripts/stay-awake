@@ -1,0 +1,32 @@
+#!/bin/bash
+# Keep the screen on and the session unlocked: no idle lock, screensaver or
+# blanking while it is on. A systemd idle inhibitor, which hypridle honours.
+#   stay-awake toggle | on | off | status
+# status prints JSON for the bar, which this script refreshes with signal 10.
+
+running() { pgrep -f '^systemd-inhibit --what=idle --who=stay-awake' >/dev/null; }
+refresh() { pkill -RTMIN+10 -x waybar 2>/dev/null; }
+
+on() {
+    running && return
+    setsid -f systemd-inhibit --what=idle --who=stay-awake --why="Stay awake (bar / Super+Ctrl+I)" \
+        --mode=block sleep infinity >/dev/null 2>&1
+}
+off() { pkill -f '^systemd-inhibit --what=idle --who=stay-awake'; }
+
+case "${1:-toggle}" in
+    status)
+        if running; then
+            printf '{"text":"󰅶","tooltip":"Staying awake: no idle lock or blanking — click to allow","class":"on"}\n'
+        else
+            printf '{"text":"󰾪","tooltip":"Idle lock and blanking allowed — click to stay awake","class":"off"}\n'
+        fi
+        exit 0 ;;
+    on) on ;;
+    off) off ;;
+    toggle) if running; then off; else on; fi ;;
+    *) echo "usage: stay-awake toggle|on|off|status" >&2; exit 1 ;;
+esac
+sleep 0.2; refresh
+running && s=on || s=off
+notify-send -a stay-awake -u low -t 2000 -i preferences-desktop-screensaver "Stay awake" "$s"

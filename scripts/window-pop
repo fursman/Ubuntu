@@ -1,0 +1,24 @@
+#!/bin/bash
+# Pop the active window out of the tiling: float it, pin it on every workspace
+# and centre it at a comfortable size. Run again to put it back in the tiles.
+#   window-pop [width height]     (default: 40% x 50% of the monitor)
+
+win=$(hyprctl activewindow -j)
+addr=$(jq -r '.address // empty' <<<"$win")
+[ -n "$addr" ] || exit 0
+sel="address:$addr"
+d() { hyprctl dispatch "$1" >/dev/null; }
+
+if [ "$(jq -r .pinned <<<"$win")" = true ]; then
+    d "hl.dsp.window.pin({ window = \"$sel\" })"
+    d "hl.dsp.window.float({ window = \"$sel\", action = \"off\" })"
+    exit 0
+fi
+
+read -r mw mh scale < <(hyprctl monitors -j | jq -r '.[] | select(.focused) | "\(.width) \(.height) \(.scale)"')
+w=${1:-$(awk -v a="$mw" -v s="$scale" 'BEGIN{printf "%d", a/s*0.40}')}
+h=${2:-$(awk -v a="$mh" -v s="$scale" 'BEGIN{printf "%d", a/s*0.50}')}
+[ "$(jq -r .floating <<<"$win")" = true ] || d "hl.dsp.window.float({ window = \"$sel\", action = \"on\" })"
+d "hl.dsp.window.resize({ window = \"$sel\", x = $w, y = $h, relative = false })"
+d "hl.dsp.window.center({ window = \"$sel\" })"
+d "hl.dsp.window.pin({ window = \"$sel\" })"

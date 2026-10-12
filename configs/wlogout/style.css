@@ -1,6 +1,6 @@
 @import "palette.css";
 
-/* wlogout — session menu. Colours from the shared Dracula palette.
+/* wlogout — session menu. Colours from the theme palette.
  *
  * Icon paths are absolute because GTK CSS cannot expand ~; setup.sh rewrites
  * the /HOME_DIR placeholder at deploy time. */
@@ -31,8 +31,8 @@ button {
 
 button:hover,
 button:focus {
-    background-color: alpha(@purple, 0.22);
-    border-color: @purple;
+    background-color: alpha(@accent, 0.22);
+    border-color: @accent;
     background-size: 46%;
 }
 
@@ -43,7 +43,7 @@ button:focus {
 #logout:hover,   #logout:focus   { background-color: alpha(@yellow, 0.22); border-color: @yellow; }
 
 button:active {
-    background-color: alpha(@purple, 0.35);
+    background-color: alpha(@accent, 0.35);
 }
 
 #lock {

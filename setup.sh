@@ -175,6 +175,21 @@ else
     POLKIT_AGENT="/usr/bin/lxpolkit"
 fi
 
+# -- Idle, lock, night light, colour picker (all from the Hyprland PPA) --
+# hypridle/hyprlock replace swayidle/gtklock when present; hyprland.lua and
+# lock-screen fall back to the old pair, so a release without them still works.
+for p in hypridle hyprlock hyprsunset hyprpicker; do
+    if apt-cache show "$p" >/dev/null 2>&1; then apt_need "$p"; else warn "$p not available on $CODENAME"; fi
+done
+
+# -- What the menu, bar and capture tools call --
+#   tesseract-ocr: copy text off the screen   zbar-tools: read QR codes
+#   qrencode: share Wi-Fi as a QR code        rofimoji: emoji picker
+#   python3-terminaltexteffects: screensaver  ncal: the bar's calendar
+#   power-profiles-daemon: power profiles (bar, menu, laptop AC/battery)
+apt_need jq tesseract-ocr zbar-tools qrencode rofimoji ncal \
+         python3-terminaltexteffects power-profiles-daemon
+
 # -- Desktop services and apps --
 apt_need thunar thunar-volman tumbler pavucontrol \
          brightnessctl playerctl pamixer \
@@ -425,9 +440,12 @@ declare -A CONFIG_MAP=(
     ["configs/gtklock/style.css"]="$HOME/.config/gtklock/style.css"
     ["configs/swaync/config.json"]="$HOME/.config/swaync/config.json"
     ["configs/swaync/style.css"]="$HOME/.config/swaync/style.css"
-    ["configs/gtk-3.0/settings.ini"]="$HOME/.config/gtk-3.0/settings.ini"
-    ["configs/gtk-4.0/settings.ini"]="$HOME/.config/gtk-4.0/settings.ini"
+    ["configs/hypr/hypridle.conf"]="$HOME/.config/hypr/hypridle.conf"
+    ["configs/hypr/hyprlock.conf"]="$HOME/.config/hypr/hyprlock.conf"
+    ["configs/desktop-menu/menu.json"]="$HOME/.config/desktop-menu/menu.json"
 )
+# GTK settings.ini, kitty/rofi/btop/swayosd colours and every palette.css are
+# rendered from the theme further down, not copied.
 
 for src in "${!CONFIG_MAP[@]}"; do
     dest="${CONFIG_MAP[$src]}"
@@ -436,13 +454,40 @@ for src in "${!CONFIG_MAP[@]}"; do
     info "-> $dest"
 done
 
-# The shared palette. GTK CSS has no ~ expansion and no search path, so every
-# stylesheet that says `@import "palette.css"` needs a copy next to it.
-for d in swaync wlogout gtklock; do
-    mkdir -p "$HOME/.config/$d"
-    cp "$SCRIPT_DIR/configs/theme/dracula.css" "$HOME/.config/$d/palette.css"
+# Hyprland toggles (hypr-toggle copies one into ~/.local/state to switch it on).
+mkdir -p "$HOME/.config/hypr/toggles"
+cp "$SCRIPT_DIR"/configs/hypr/toggles/*.lua "$HOME/.config/hypr/toggles/"
+info "-> ~/.config/hypr/toggles/ ($(ls "$SCRIPT_DIR"/configs/hypr/toggles | wc -l) toggles)"
+
+# The screensaver's art is meant to be replaced, so it is only seeded.
+if [ ! -f "$HOME/.config/screensaver/banner.txt" ]; then
+    mkdir -p "$HOME/.config/screensaver"
+    cp "$SCRIPT_DIR/configs/screensaver/banner.txt" "$HOME/.config/screensaver/banner.txt"
+fi
+
+# A screen with a backlight (a laptop panel) gets a brightness slider in the
+# quick-settings panel; desktops would only get an error row.
+# Prefer the panel's own controller (raw/platform) over a firmware stand-in
+# such as acpi_video0, which on hybrid laptops is listed first and does nothing.
+BACKLIGHT_DEV=""
+for t in raw platform firmware; do
+    for d in /sys/class/backlight/*; do
+        [ -e "$d/type" ] && [ "$(cat "$d/type")" = "$t" ] && { BACKLIGHT_DEV=$(basename "$d"); break 2; }
+    done
 done
-info "-> palette.css deployed to swaync, wlogout, gtklock"
+if [ -n "$BACKLIGHT_DEV" ]; then
+    python3 - "$HOME/.config/swaync/config.json" "$BACKLIGHT_DEV" <<'PYEOF'
+import json, sys
+p, dev = sys.argv[1], sys.argv[2]
+c = json.load(open(p))
+w = c["widgets"]
+if "backlight" not in w:
+    w.insert(w.index("volume") + 1, "backlight")
+c["widget-config"]["backlight"] = {"label": "󰃠", "device": dev}
+json.dump(c, open(p, "w"), indent=2, ensure_ascii=False)
+PYEOF
+    info "-> quick settings: brightness slider for $BACKLIGHT_DEV"
+fi
 
 mkdir -p "$HOME/.local/share/rofi/themes"
 cp "$SCRIPT_DIR/configs/rofi/spotlight-dark.rasi" "$HOME/.local/share/rofi/themes/spotlight-dark.rasi"
@@ -508,6 +553,30 @@ for script in "$SCRIPT_DIR"/scripts/*; do
     install -m 0755 "$script" "$HOME/.local/bin/$(basename "$script")"
     info "-> ~/.local/bin/$(basename "$script")"
 done
+
+# -- Theme ------------------------------------------------------------------
+# Themes are omarchy-format directories (colors.toml + optional backgrounds/).
+# This repo ships dracula; `desktop-theme sync` (or the menu) adds omarchy's
+# whole collection. Templates are rendered into every app's config here and on
+# each theme change, so this is also what puts palette.css, kitty's colours,
+# rofi's colours etc. in place on a fresh machine.
+THEME_SHARE="$HOME/.local/share/desktop-theme"
+mkdir -p "$THEME_SHARE/themes" "$THEME_SHARE/templates"
+cp -r "$SCRIPT_DIR"/themes/. "$THEME_SHARE/themes/"
+rm -f "$THEME_SHARE"/templates/*.tpl
+cp "$SCRIPT_DIR"/configs/theme/templates/*.tpl "$THEME_SHARE/templates/"
+"$HOME/.local/bin/desktop-theme" reapply -q \
+    && info "-> theme '$("$HOME/.local/bin/desktop-theme" current)' rendered ($(ls "$THEME_SHARE/templates" | wc -l) templates)" \
+    || warn "desktop-theme could not render the theme"
+
+# btop picks its colours from the rendered theme file.
+BTOP_CONF="$HOME/.config/btop/btop.conf"
+mkdir -p "$(dirname "$BTOP_CONF")"
+if [ -f "$BTOP_CONF" ] && grep -q '^color_theme' "$BTOP_CONF"; then
+    sed -i 's|^color_theme = .*|color_theme = "desktop"|' "$BTOP_CONF"
+else
+    echo 'color_theme = "desktop"' >> "$BTOP_CONF"
+fi
 
 # Razer per-key RGB: a calm warm-white backlight, and the CapsLock key turns
 # red while caps-sudo has passwordless sudo armed. Wired here rather than in
@@ -694,6 +763,12 @@ success "Helper scripts installed"
 # ---------------------------------------------------------------------------
 if [ "$CONFIGS_ONLY" = 0 ]; then
 step "10/10 - Wallpaper daemon, assets, and tuning"
+# omarchy's theme collection (~280 MB, mostly wallpapers): sparse git checkout
+# into ~/.local/share/desktop-theme/omarchy, updated by `desktop-theme sync`.
+"$HOME/.local/bin/desktop-theme" sync \
+    && success "omarchy themes available (Super + Ctrl + T)" \
+    || warn "Could not fetch omarchy's themes; try later: desktop-theme sync"
+
 # ---------------------------------------------------------------------------
 # awww is not packaged anywhere; distro Rust is usually too old to build it.
 if command -v rustup &>/dev/null || [ -x "$HOME/.cargo/bin/rustup" ]; then

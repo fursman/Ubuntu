@@ -1,0 +1,37 @@
+#!/bin/bash
+# Terminal-art screensaver (terminaltexteffects), shown by hypridle a few
+# minutes before the lock. Any key or mouse movement ends it.
+#   screensaver start | stop | toggle | status
+#
+# The art is ~/.config/screensaver/banner.txt -- replace it with your own.
+# `toggle` switches the screensaver off/on (a flag file); the lock still comes.
+
+FLAG="${XDG_STATE_HOME:-$HOME/.local/state}/desktop/screensaver-off"
+
+case "${1:-start}" in
+    status) [ -f "$FLAG" ] && echo off || echo on; exit 0 ;;
+    toggle)
+        mkdir -p "$(dirname "$FLAG")"
+        if [ -f "$FLAG" ]; then rm -f "$FLAG"; s=on; else touch "$FLAG"; s=off; fi
+        notify-send -a screensaver -u low -t 2000 -i preferences-desktop-screensaver "Screensaver" "$s"
+        exit 0 ;;
+    stop) pkill -x screensaver-run; exit 0 ;;
+    start) ;;
+    *) echo "usage: screensaver start|stop|toggle|status" >&2; exit 1 ;;
+esac
+
+[ -f "$FLAG" ] && exit 0
+command -v tte >/dev/null || exit 0
+pgrep -x screensaver-run >/dev/null && exit 0
+pgrep -x hyprlock >/dev/null && exit 0
+
+# Font sized to the panel, so the banner fills a similar share of any screen.
+hyprctl monitors -j | jq -r '.[] | select(.dpmsStatus) | "\(.name) \(.width / .scale) \(.height / .scale)"' |
+while read -r mon w h; do
+    size=$(awk -v w="$w" -v h="$h" 'BEGIN{ s = w / 130; if (h / 22 < s) s = h / 22; printf "%d", (s < 12 ? 12 : s) }')
+    hyprctl dispatch "hl.dsp.focus({ monitor = \"$mon\" })" >/dev/null
+    setsid -f kitty --class screensaver -o font_size="$size" -o background_opacity=1 \
+        -o background=#000000 -o cursor_shape=block -o cursor_blink_interval=0 \
+        "$HOME/.local/bin/screensaver-run" >/dev/null 2>&1
+    sleep 0.4
+done

@@ -1,0 +1,34 @@
+#!/bin/bash
+# Clamshell mode for laptops: lid-switch close | open   (bound in hyprland.lua)
+#
+# Lid closed with an external monitor connected: the internal panel is
+# switched off and everything moves to the external one. Lid opened: it comes
+# back. Without an external monitor this does nothing and logind's lid
+# handling (suspend) applies as usual.
+#
+# The choice is also written to ~/.local/state/hypr/monitors/lid.lua, which
+# hyprland.lua loads on every reload, so a theme change or config redeploy
+# while docked does not wake the panel. That file re-checks the lid itself, so
+# a stale copy can never leave an open laptop with its panel off.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/hypr/monitors/lid.lua"
+internal=$(hyprctl monitors all -j | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)")) | .name' | head -1)
+[ -n "$internal" ] || exit 0
+
+case "$1" in
+    close)
+        others=$(hyprctl monitors -j | jq -r --arg i "$internal" '[.[] | select(.name != $i)] | length')
+        [ "$others" -gt 0 ] || exit 0
+        mkdir -p "$(dirname "$STATE")"
+        cat > "$STATE" <<LUA
+-- Written by lid-switch: keep $internal off while the lid is closed (docked).
+local closed = false
+local p = io.popen("cat /proc/acpi/button/lid/*/state 2>/dev/null")
+if p then closed = (p:read("*a") or ""):find("closed") ~= nil; p:close() end
+if closed then hl.monitor({ output = "$internal", disabled = true }) end
+LUA
+        hyprctl eval "hl.monitor({ output = \"$internal\", disabled = true })" >/dev/null ;;
+    open)
+        rm -f "$STATE"
+        hyprctl reload >/dev/null ;;
+    *) echo "usage: lid-switch close|open" >&2; exit 1 ;;
+esac

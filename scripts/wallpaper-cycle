@@ -1,40 +1,33 @@
 #!/usr/bin/env bash
-# Cycle wallpapers with awww transitions
-# Usage: wallpaper-cycle next|prev
+# Step through wallpapers: wallpaper-cycle next|prev
+#
+# The pool is the current theme's own wallpapers when it ships some
+# (desktop-theme wallpapers), otherwise every image under ~/Pictures/Wallpapers.
+# Position comes from the wallpaper actually on screen, so it stays right after
+# a theme switch or a pick from the wallpaper menu.
 
 export PATH="$HOME/.local/bin:$PATH"
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export WAYLAND_DISPLAY=wayland-1
-
 WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
-STATE_FILE="$HOME/.cache/awww/current-index"
+CURRENT="${XDG_STATE_HOME:-$HOME/.local/state}/desktop-theme/wallpaper"
 
-# Build sorted list of all images (recursive, skip current.jpg)
-mapfile -t images < <(find "$WALLPAPER_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' \) ! -name 'current.jpg' | sort)
+mapfile -t images < <(desktop-theme wallpapers 2>/dev/null)
+if [ ${#images[@]} -eq 0 ]; then
+    mapfile -t images < <(find "$WALLPAPER_DIR" -type f \( -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' \) ! -name 'current.*' | sort)
+fi
+[ ${#images[@]} -eq 0 ] && exit 1
 
-[[ ${#images[@]} -eq 0 ]] && exit 1
+now="$(readlink -f "$CURRENT" 2>/dev/null)"
+index=-1
+for i in "${!images[@]}"; do
+    [ "$(readlink -f "${images[$i]}")" = "$now" ] && { index=$i; break; }
+done
 
-# Read current index
-index=0
-[[ -f "$STATE_FILE" ]] && index=$(cat "$STATE_FILE")
-
-# Advance
 case "${1:-next}" in
     next) index=$(( (index + 1) % ${#images[@]} )) ;;
     prev) index=$(( (index - 1 + ${#images[@]}) % ${#images[@]} )) ;;
 esac
 
-# Save state
-echo "$index" > "$STATE_FILE"
-
-# Pick random transition
-transitions=(center outer left right top bottom simple any)
-rand_t=${transitions[$RANDOM % ${#transitions[@]}]}
-
-# Set wallpaper
-awww img --transition-type "$rand_t" --transition-step 2 --transition-fps 60 "${images[$index]}"
-
-# Notify
-basename=$(basename "${images[$index]}")
-dirname=$(basename $(dirname "${images[$index]}"))
-notify-send -t 2000 "Wallpaper" "$dirname/$basename ($rand_t)"
+wallpaper-set "${images[$index]}"
+notify-send -a wallpaper -u low -t 2000 -i preferences-desktop-wallpaper \
+    "Wallpaper $((index + 1))/${#images[@]}" "$(basename "${images[$index]}")"

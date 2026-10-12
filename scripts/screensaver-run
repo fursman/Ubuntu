@@ -1,0 +1,18 @@
+#!/bin/bash
+# The screensaver's terminal: loop random terminaltexteffects over the banner
+# until a key is pressed (or `screensaver stop` / the lock screen ends it).
+ART="$HOME/.config/screensaver/banner.txt"
+[ -f "$ART" ] || ART=<(hostname)
+printf '\033[?25l'                          # hide the cursor
+trap 'printf "\033[?25h"; exit 0' INT TERM HUP
+stty -echo 2>/dev/null
+while :; do
+    clear
+    tte --input-file "$ART" --frame-rate 60 --canvas-width 0 --canvas-height 0 \
+        --anchor-canvas c --anchor-text c --random-effect 2>/dev/null &
+    pid=$!
+    while kill -0 $pid 2>/dev/null; do
+        read -rsn1 -t 0.2 && { kill $pid; exit 0; }
+    done
+    read -rsn1 -t 3 && exit 0
+done

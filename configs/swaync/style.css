@@ -1,12 +1,16 @@
 @import "palette.css";
 
-/* swaync — colours come from the shared Dracula palette.
+/* swaync — colours come from the theme palette (palette.css, written by
+ * desktop-theme), so the panel follows the desktop theme.
  *
  * Sized for the 4K / 32:9 panels these machines drive at scale 1: the
  * stock 12px body text is unreadable there. Popups and the control centre
  * share one card style, so a notification looks the same in both places.
- * Urgency shows as the card's left edge: muted for low, purple for normal,
- * red for critical. */
+ * Urgency shows as the card's left edge: muted for low, accent for normal,
+ * red for critical.
+ *
+ * The control centre doubles as quick settings: toggles, volume, media, then
+ * the notifications. */
 
 * {
     font-family: "JetBrains Mono", "Symbols Nerd Font", monospace;
@@ -28,7 +32,7 @@
 }
 
 .notification-row:focus .notification {
-    border-color: @purple;
+    border-color: @accent;
 }
 
 .notification-row .notification-background {
@@ -38,14 +42,14 @@
 .notification-row .notification-background .notification {
     background: alpha(@bg, 0.94);
     border: 1px solid @border-soft;
-    border-left: 4px solid @purple;
+    border-left: 4px solid @accent;
     border-radius: 12px;
     box-shadow: 0 4px 14px @shadow-soft;
     padding: 0;
 }
 
 .notification-row .notification-background .notification.low {
-    border-left-color: @comment;
+    border-left-color: @muted;
 }
 
 .notification-row .notification-background .notification.critical {
@@ -78,7 +82,7 @@
 }
 
 .time {
-    color: @comment;
+    color: @muted;
     font-size: 14px;
     margin-right: 28px;
 }
@@ -95,7 +99,7 @@
 }
 
 .notification-action > button {
-    background: @current;
+    background: @bg-light;
     color: @fg;
     border: none;
     border-radius: 8px;
@@ -105,24 +109,24 @@
 }
 
 .notification-action > button:hover {
-    background: @purple;
+    background: @accent;
     color: @bg;
 }
 
 progressbar trough {
-    background: @current;
+    background: @bg-light;
     border-radius: 4px;
     min-height: 6px;
 }
 
 progressbar progress {
-    background: @purple;
+    background: @accent;
     border-radius: 4px;
     min-height: 6px;
 }
 
 .close-button {
-    background: @current;
+    background: @bg-light;
     color: @fg;
     border: none;
     border-radius: 50%;
@@ -152,7 +156,7 @@ progressbar progress {
 }
 
 .control-center .control-center-list-placeholder {
-    color: @comment;
+    color: @muted;
     font-size: 18px;
     opacity: 1;
 }
@@ -162,13 +166,13 @@ progressbar progress {
 }
 
 .widget-title > label {
-    color: @purple;
+    color: @accent;
     font-size: 24px;
     font-weight: bold;
 }
 
 .widget-title > button {
-    background: @current;
+    background: @bg-light;
     color: @fg;
     border: none;
     border-radius: 8px;
@@ -181,6 +185,101 @@ progressbar progress {
     color: @bg;
 }
 
+/* -- Quick settings: toggle grid ---------------------------------------- */
+
+.widget-buttons-grid {
+    padding: 4px 0 8px 0;
+}
+
+.widget-buttons-grid flowboxchild > button {
+    background: @bg-light;
+    color: @fg;
+    border: none;
+    border-radius: 14px;
+    min-height: 56px;
+    margin: 4px;
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 24px;
+}
+
+.widget-buttons-grid flowboxchild > button:hover {
+    background: mix(@bg-light, @fg, 0.12);
+}
+
+.widget-buttons-grid flowboxchild > button.toggle:checked {
+    background: @accent;
+    color: @on-accent;
+}
+
+/* -- Volume ---------------------------------------------------------------- */
+
+.widget-volume {
+    background: alpha(@bg-light, 0.5);
+    border-radius: 14px;
+    padding: 8px 12px;
+    margin: 4px 8px 8px 8px;
+}
+
+.widget-volume > box > label {
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 22px;
+    color: @fg;
+    margin-right: 8px;
+}
+
+.widget-volume > box > button {
+    background: transparent;
+    color: @fg;
+    border: none;
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 18px;
+}
+
+.widget-volume row label {
+    color: @fg;
+    font-size: 15px;
+}
+
+.per-app-volume {
+    background: transparent;
+    margin: 4px 0 0 0;
+}
+
+.widget-volume scale trough,
+.widget-backlight scale trough {
+    background: alpha(@fg, 0.15);
+    border-radius: 99px;
+    min-height: 8px;
+}
+
+.widget-volume scale highlight,
+.widget-backlight scale highlight {
+    background: @accent;
+    border-radius: 99px;
+}
+
+.widget-volume scale slider,
+.widget-backlight scale slider {
+    background: @fg-bright;
+    border-radius: 99px;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+.widget-backlight {
+    background: alpha(@bg-light, 0.5);
+    border-radius: 14px;
+    padding: 8px 12px;
+    margin: 0 8px 8px 8px;
+}
+
+.widget-backlight > label {
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 22px;
+    color: @fg;
+    margin-right: 8px;
+}
+
 .widget-dnd {
     margin-bottom: 8px;
 }
@@ -191,13 +290,13 @@ progressbar progress {
 }
 
 .widget-dnd > switch {
-    background: @current;
+    background: @bg-light;
     border: 1px solid @border-soft;
     border-radius: 14px;
 }
 
 .widget-dnd > switch:checked {
-    background: @purple;
+    background: @accent;
 }
 
 .widget-dnd > switch slider {

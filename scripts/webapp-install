@@ -1,0 +1,48 @@
+#!/bin/bash
+# Turn a website into an app: its own window (Chromium --app), its own entry in
+# the launcher, and its favicon as the icon.
+#   webapp-install "<Name>" <https://url>
+#   webapp-install --remove "<Name>"
+APPS="$HOME/.local/share/applications"
+ICONS="$HOME/.local/share/icons/webapps"
+mkdir -p "$APPS" "$ICONS"
+fail() { echo "webapp-install: $1" >&2; notify-send -a webapps -u normal "Web app not installed" "$1"; exit 1; }
+slug() {
+    local s
+    s=$(tr '[:upper:] ' '[:lower:]-' <<<"$1" | tr -cd 'a-z0-9-')
+    [ -n "$s" ] || s=app-$(printf '%s' "$1" | sha1sum | cut -c1-8)   # names with no ASCII letters
+    printf '%s' "$s"
+}
+
+if [ "$1" = --remove ]; then
+    [ -n "$2" ] || fail "Which web app? Give its name."
+    s=$(slug "$2")
+    [ -f "$APPS/webapp-$s.desktop" ] || fail "No web app called $2"
+    rm -f "$APPS/webapp-$s.desktop" "$ICONS/$s.png"
+    notify-send -a webapps "Web app removed" "$2"; exit 0
+fi
+
+name="$1"; url="$2"
+[ -n "$name" ] || fail 'Give a name and an address, e.g.  WhatsApp https://web.whatsapp.com'
+[[ $url =~ ^https?://[^[:space:]\"\`\$\\]+$ ]] || fail "Not a web address: ${url:-nothing given}"
+s=$(slug "$name")
+host=$(sed -E 's#^https?://([^/]+).*#\1#' <<<"$url")
+icon="$ICONS/$s.png"
+curl -fsSL --max-time 10 "https://www.google.com/s2/favicons?domain=$host&sz=256" -o "$icon" 2>/dev/null || icon=applications-internet
+
+browser=$(command -v chromium-browser || command -v chromium || command -v google-chrome || echo chromium-browser)
+# Desktop-entry rules: % starts a field code, so a literal one is %%; the URL
+# is quoted so & and ; survive.
+exec_url=${url//%/%%}
+cat > "$APPS/webapp-$s.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=$name
+Comment=$url
+Exec=$browser "--app=$exec_url" --class=webapp-$s
+Icon=$icon
+Categories=Network;WebBrowser;
+StartupWMClass=webapp-$s
+DESKTOP
+update-desktop-database "$APPS" 2>/dev/null
+notify-send -a webapps -i "$icon" "Web app installed" "$name is in the launcher (Super + Enter)"

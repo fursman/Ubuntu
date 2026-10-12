@@ -16,7 +16,7 @@ hl.monitor({ output = "", mode = "highres@highrr", position = "auto",  scale = 1
 --------------------------------------------------------------- ENVIRONMENT --
 hl.env("XCURSOR_SIZE", "48")
 hl.env("XCURSOR_THEME", "Adwaita")
-hl.env("GTK_THEME", "Dracula")
+-- GTK_THEME is set by theme.lua, which follows the desktop theme.
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
@@ -170,20 +170,69 @@ hl.animation({ leaf = "workspaces",       enabled = true, speed = 5,  bezier = "
 hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 5,  bezier = "easeOutExpo",  style = "slidevert" })
 hl.animation({ leaf = "layers",           enabled = true, speed = 4,  bezier = "easeOutQuint", style = "popin 90%" })
 
+hl.config({
+    misc = {
+        -- An app asking for attention (a link opened from the terminal, a
+        -- notification's "open") brings its window forward instead of only
+        -- flagging it urgent.
+        focus_on_activate      = true,
+        -- Any key wakes a display turned off by the idle timer, not just the mouse.
+        key_press_enables_dpms = true,
+        mouse_move_enables_dpms = true,
+    },
+    binds = {
+        -- SUPER + CTRL + TAB jumps back and forth between the two last workspaces.
+        allow_workspace_cycles = true,
+    },
+    group = {
+        groupbar = {
+            font_size        = 18,
+            height           = 26,
+            gradients        = true,
+            gradient_rounding = 6,
+            indicator_height = 0,
+        },
+    },
+    xwayland = {
+        -- X11 apps render at native resolution instead of being upscaled blurry
+        -- when a monitor scale other than 1 is in use (SUPER + /).
+        force_zero_scaling = true,
+    },
+    scrolling = {
+        -- Per-workspace scrolling layout (SUPER + ALT + L): new columns take
+        -- half the screen, so two sit side by side on the 32:9 panel.
+        column_width = 0.5,
+        fullscreen_on_one_column = false,
+    },
+})
+
 ----------------------------------------------------------------- AUTOSTART --
+-- Wallpaper: the one last chosen (wallpaper-set keeps a symlink to it), else
+-- the shipped default.
+local WALLPAPER = [[img=~/.local/state/desktop-theme/wallpaper; [ -e "$img" ] || img=~/Pictures/Wallpapers/current.jpg; ]]
+    .. [[~/.local/bin/awww img --transition-type center --transition-step 2 --transition-fps 60 "$img"]]
+
+-- Idle: hypridle when installed (~/.config/hypr/hypridle.conf: screensaver,
+-- lock, screen off), swayidle as the fallback. Both honour idle inhibitors:
+-- the stay-awake toggle and any fullscreen window.
+local IDLE = [[command -v hypridle >/dev/null && exec hypridle; exec swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" resume "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" before-sleep '~/.local/bin/lock-screen']]
+
 hl.on("hyprland.start", function()
     hl.exec_cmd("~/.local/bin/waybar-launch")
     hl.exec_cmd("~/.local/bin/lock-relock")
     hl.exec_cmd("~/.local/bin/awww-daemon")
-    hl.exec_cmd("sleep 3 && ~/.local/bin/awww img --transition-type center --transition-step 2 --transition-fps 60 ~/Pictures/Wallpapers/current.jpg")
+    hl.exec_cmd("sleep 3; " .. WALLPAPER)
     hl.exec_cmd("swayosd-server")
     hl.exec_cmd("swaync")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
-    -- Under a Lua config `hyprctl dispatch` takes a Lua dispatcher expression;
-    -- the old `dpms off` form fails to parse and the screen never powers down.
-    -- [[...]] so the inner quotes need no Lua escaping.
-    hl.exec_cmd([[swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" resume "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" before-sleep '~/.local/bin/lock-screen']])
+    hl.exec_cmd(IDLE)
+    -- Night light: hyprsunset idles at identity until `nightlight` sets a
+    -- temperature; `nightlight restore` re-applies the last state after login.
+    hl.exec_cmd("command -v hyprsunset >/dev/null && { hyprsunset & sleep 2; ~/.local/bin/nightlight restore; }")
+    -- Low-battery warnings and AC/battery power profiles. Exits at once on a
+    -- machine without a battery.
+    hl.exec_cmd("~/.local/bin/power-monitor")
 end)
 
 -------------------------------------------------------------- WINDOW RULES --
@@ -191,7 +240,7 @@ local function float(name, match)
     hl.window_rule({ name = name, match = match, float = true })
 end
 
-float("float-pavucontrol",  { class = "^(pavucontrol)$" })
+float("float-pavucontrol",  { class = "^(pavucontrol|org.pulseaudio.pavucontrol)$" })
 float("float-blueman",      { class = "^(blueman-manager)$" })
 float("float-nm-editor",    { class = "^(nm-connection-editor)$" })
 float("float-seahorse",     { class = "^(org.gnome.seahorse.Application)$" })
@@ -201,6 +250,17 @@ float("float-open-file",    { title = "^(Open File)(.*)$" })
 float("float-portal-gtk",   { class = "^(xdg-desktop-portal-gtk)$" })
 float("float-calculator",   { class = "^(org.gnome.Calculator)$" })
 float("float-thunar-progress", { class = "^(thunar)$", title = "^(File Operation Progress)$" })
+float("float-imv-mpv-tui",  { class = "^(imv|mpv|floating-tui)$" })
+-- Every app's file pickers and "choose ..." dialogs, whatever they are titled.
+float("float-dialogs", {
+    title = "^(Open.*Files?|Open [Ff]older.*|Save.*Files?|Save.*As|Select.*|[Cc]hoose.*|.*wants to (open|save).*)$",
+})
+
+hl.window_rule({ name = "center-dialogs", match = { title = "^(Open.*Files?|Save.*As|Select.*|[Cc]hoose.*)$" }, center = true })
+
+-- TUI panels opened from the bar and menu (btop, nmtui, ...) as floating
+-- windows of a sensible size.
+hl.window_rule({ name = "floating-tui-size", match = { class = "^(floating-tui)$" }, size = "1400 900", center = true })
 
 hl.window_rule({
     name  = "rofi",
@@ -210,10 +270,10 @@ hl.window_rule({
 
 hl.window_rule({
     name  = "picture-in-picture",
-    match = { title = "^(Picture-in-Picture)$" },
-    float = true, pin = true,
-    size  = "480 270",
-    move  = "100%-490 100%-280",
+    match = { title = "^(Picture.?in.?[Pp]icture)$" },
+    float = true, pin = true, keep_aspect_ratio = true, border_size = 0,
+    size  = "640 360",
+    move  = "100%-650 100%-370",
 })
 
 hl.window_rule({
@@ -225,124 +285,211 @@ hl.window_rule({
     animation = "slide",
 })
 
+-- No blanket "fullscreen inhibits idle" rule: it also caught the fullscreen
+-- screensaver (so the session never locked) and maximized windows. Video
+-- players and browsers playing media inhibit idle themselves.
+
+-- Browsers' "is sharing your screen" bars belong nowhere near the tiles.
+hl.window_rule({
+    name = "hide-sharing-indicator",
+    match = { title = "^(.* is sharing (your screen|a window)\\.)$" },
+    workspace = "special:sharing silent",
+})
+
+-- Apps may not maximize themselves out of the tiling layout.
+hl.window_rule({ name = "no-self-maximize", match = { class = ".*" }, suppress_event = "maximize" })
+
+-- The screensaver (hypridle -> screensaver): fullscreen, no animation in.
+hl.window_rule({ name = "screensaver", match = { class = "^(screensaver)$" }, fullscreen = true, animation = "fade" })
+
 for _, ns in ipairs({ "swaync-control-center", "swaync-notification-window" }) do
     hl.layer_rule({ name = "blur-" .. ns, match = { namespace = ns }, blur = true, ignore_alpha = 1 })
 end
+hl.layer_rule({ name = "blur-rofi", match = { namespace = "rofi" }, blur = true, ignore_alpha = 0.5 })
 
 ------------------------------------------------- SPECIAL WORKSPACES --------
 hl.workspace_rule({ workspace = "special:scratchpad", on_created_empty = "kitty --class scratchpad" })
 hl.workspace_rule({ workspace = "special:music",      on_created_empty = "kitty --class scratchpad -e playerctl metadata --follow" })
 
 --------------------------------------------------------------- KEYBINDINGS --
+-- Every bind carries a description, "Section › What it does". hypr-cheatsheet
+-- (SUPER + SPACE) is generated from them via `hyprctl binds`, so the help can
+-- never drift from what the keys actually do.
 local mainMod = "SUPER"
-local function exec(keys, cmd, opts) hl.bind(keys, hl.dsp.exec_cmd(cmd), opts) end
-
--- Wallpaper cycling
-exec("Home", "~/.local/bin/wallpaper-cycle prev")
-exec("End",  "~/.local/bin/wallpaper-cycle next")
-
--- Apps
-exec(mainMod .. " + RETURN", "rofi -show drun -theme spotlight-dark")
-exec(mainMod .. " + T", "kitty")
-exec(mainMod .. " + X", "wlogout --protocol layer-shell")
-exec(mainMod .. " + B", "firefox")
-exec(mainMod .. " + ALT + B", "chromium-browser")
-exec(mainMod .. " + C", "claude-desktop")
-exec(mainMod .. " + F", "thunar")
-exec(mainMod .. " + K", "seahorse")
-exec(mainMod .. " + O", "pavucontrol")
-exec(mainMod .. " + S", "signal-desktop")
-exec(mainMod .. " + R", "flatpak run org.gnome.World.PikaBackup")
-exec(mainMod .. " + L", "~/.local/bin/lock-screen")
-exec(mainMod .. " + space", "~/.local/bin/hypr-cheatsheet")
-exec(mainMod .. " + V", 'cliphist list | rofi -dmenu -theme spotlight-dark -p "Clipboard" | cliphist decode | wl-copy')
-exec(mainMod .. " + N", "swaync-client -t -sw")
-exec(mainMod .. " + SHIFT + C", [[grim -g "$(slurp -p)" -t ppm - | convert - -format '%[hex:p{0,0}]' txt:- | tail -1 | cut -d' ' -f4 | wl-copy && notify-send "Color Copied" "$(wl-paste)"]])
-
-hl.bind(mainMod .. " + Q", hl.dsp.window.close())
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
-hl.bind(mainMod .. " + ESCAPE", hl.dsp.window.fullscreen())
-hl.bind(mainMod .. " + grave", hl.dsp.workspace.toggle_special("scratchpad"))
-
--- Voice assistant. SUPER tapped alone toggles it, hence release.
--- Inert on a machine with no assistant installed.
-exec("SUPER + SUPER_L", "kill -USR1 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)", { release = true })
-exec(mainMod .. " + SHIFT + V", "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)")
-exec(mainMod .. " + M", "~/.local/bin/assistant --swap")
--- The conversation panel (the Assistant repo installs the toggle script).
-exec(mainMod .. " + A", "~/.local/bin/assistant-panel-toggle")
-
--- Volume / brightness / caps (SwayOSD)
-exec("XF86AudioRaiseVolume", "swayosd-client --output-volume raise")
-exec("XF86AudioLowerVolume", "swayosd-client --output-volume lower")
-exec("XF86AudioMute",        "swayosd-client --output-volume mute-toggle")
-exec("XF86AudioMicMute",     "swayosd-client --input-volume mute-toggle")
-exec("Caps_Lock",            "swayosd-client --caps-lock", { locked = true })
-exec("XF86MonBrightnessUp",   "swayosd-client --brightness raise")
-exec("XF86MonBrightnessDown", "swayosd-client --brightness lower")
-exec("XF86KbdBrightnessUp",   "brightnessctl -d spi::kbd_backlight set 10%+")
-exec("XF86KbdBrightnessDown", "brightnessctl -d spi::kbd_backlight set 10%-")
-
--- Media keys
-exec("XF86AudioPlay",  "playerctl play-pause")
-exec("XF86AudioPause", "playerctl play-pause")
-exec("XF86AudioNext",  "playerctl next")
-exec("XF86AudioPrev",  "playerctl previous")
-exec("XF86AudioStop",  "playerctl stop")
-
--- Screenshots
-exec("Print", [[grim - | wl-copy && notify-send "Screen Captured" "Full screen -> Clipboard"]])
-exec(mainMod .. " + F12", [[grim ~/Pictures/Screenshot-$(date +'%Y-%m-%d-%H-%M-%S').png && notify-send "Screen Captured" "Saved to ~/Pictures"]])
-exec(mainMod .. " + SHIFT + S", [[grim -g "$(slurp -d)" - | wl-copy && notify-send "Region Captured" "Selection -> Clipboard"]])
-exec(mainMod .. " + SHIFT + F12", [[grim -g "$(slurp -d)" ~/Pictures/Screenshot-$(date +'%Y-%m-%d-%H-%M-%S').png && notify-send "Region Captured" "Saved to ~/Pictures"]])
--- Annotate before saving — swappy opens the grab for arrows/text/blur, so
--- marking up a screenshot doesn't need a round trip through an image editor.
-exec(mainMod .. " + SHIFT + A", [[grim -g "$(slurp -d)" - | swappy -f -]])
-
--- Screen recording
-exec(mainMod .. " + SHIFT + R", [[pkill wf-recorder || wf-recorder -g "$(slurp)" -f ~/Videos/Recording-$(date +'%Y-%m-%d-%H-%M-%S').mp4 && notify-send "Recording Saved"]])
-exec(mainMod .. " + ALT + R",   [[pkill wf-recorder || wf-recorder -f ~/Videos/Recording-$(date +'%Y-%m-%d-%H-%M-%S').mp4 && notify-send "Recording Saved"]])
-
--- Focus / move / resize
-local dirs = { left = "left", right = "right", up = "up", down = "down" }
-for key, dir in pairs(dirs) do
-    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ direction = dir }))
-    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ direction = dir }))
+local section = "General"
+local function group(name) section = name end
+local function bind(keys, desc, action, opts)
+    opts = opts or {}
+    opts.description = section .. " › " .. desc
+    if type(action) == "string" then action = hl.dsp.exec_cmd(action) end
+    hl.bind(keys, action, opts)
 end
-hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.resize({ x = -40, y = 0 }))
-hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.resize({ x = 40,  y = 0 }))
-hl.bind(mainMod .. " + CTRL + up",    hl.dsp.window.resize({ x = 0,   y = -40 }))
-hl.bind(mainMod .. " + CTRL + down",  hl.dsp.window.resize({ x = 0,   y = 40 }))
 
--- Float / pin / center
-hl.bind(mainMod .. " + SHIFT + F",     hl.dsp.window.float({ action = "toggle" }))
-hl.bind(mainMod .. " + SHIFT + P",     hl.dsp.window.pin())
-hl.bind(mainMod .. " + SHIFT + space", hl.dsp.window.center())
+group("Help")
+bind(mainMod .. " + space",       "Keybinding cheatsheet",      "~/.local/bin/hypr-cheatsheet")
+bind(mainMod .. " + ALT + space", "System menu",                "~/.local/bin/desktop-menu")
 
--- Group (tabbed)
-hl.bind(mainMod .. " + G",   hl.dsp.group.toggle())
-hl.bind(mainMod .. " + TAB", hl.dsp.group.next())
+group("Apps")
+bind(mainMod .. " + RETURN",  "App launcher",              "rofi -show drun -theme spotlight-dark")
+bind(mainMod .. " + T",       "Terminal (kitty)",          "kitty")
+bind(mainMod .. " + B",       "Firefox",                   "firefox")
+bind(mainMod .. " + ALT + B", "Chromium",                  "chromium-browser")
+bind(mainMod .. " + C",       "Claude",                    "claude-desktop")
+bind(mainMod .. " + F",       "File manager (Thunar)",     "thunar")
+bind(mainMod .. " + K",       "Passwords (Seahorse)",      "seahorse")
+bind(mainMod .. " + O",       "Audio settings",            "pavucontrol")
+bind(mainMod .. " + S",       "Signal",                    "signal-desktop")
+bind(mainMod .. " + R",       "Backups (Pika)",            "flatpak run org.gnome.World.PikaBackup")
+bind(mainMod .. " + SHIFT + B", "System monitor (btop)",   "~/.local/bin/launch-tui btop")
 
--- Workspaces 1-10
+group("Assistant")
+-- SUPER tapped alone toggles it, hence release. Inert on a machine with no
+-- assistant installed.
+bind("SUPER + SUPER_L",           "Voice mode on/off (tap Super)", "kill -USR1 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)", { release = true })
+bind(mainMod .. " + SHIFT + V",   "New conversation",              "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)")
+bind(mainMod .. " + M",           "Swap model",                    "~/.local/bin/assistant --swap")
+bind(mainMod .. " + A",           "Conversation panel",            "~/.local/bin/assistant-panel-toggle")
+
+group("Tools")
+bind(mainMod .. " + V",          "Clipboard history",        'cliphist list | rofi -dmenu -theme spotlight-dark -p "Clipboard" | cliphist decode | wl-copy')
+bind(mainMod .. " + period",     "Emoji picker",             "~/.local/bin/emoji-picker")
+bind(mainMod .. " + N",          "Notifications & quick settings", "swaync-client -t -sw")
+bind(mainMod .. " + SHIFT + N",  "Do not disturb on/off",    "swaync-client -d -sw")
+bind(mainMod .. " + L",          "Lock screen",              "~/.local/bin/lock-screen")
+bind(mainMod .. " + X",          "Power menu",               "~/.local/bin/desktop-menu system")
+
+group("Style")
+bind(mainMod .. " + CTRL + T",   "Pick a theme",             "~/.local/bin/desktop-menu theme")
+bind(mainMod .. " + CTRL + W",   "Pick a wallpaper",         "~/.local/bin/desktop-menu wallpaper")
+bind(mainMod .. " + Home",       "Previous wallpaper",       "~/.local/bin/wallpaper-cycle prev")
+bind(mainMod .. " + End",        "Next wallpaper",           "~/.local/bin/wallpaper-cycle next")
+
+group("Toggles")
+bind(mainMod .. " + CTRL + O",   "Toggles menu",             "~/.local/bin/desktop-menu toggle")
+bind(mainMod .. " + CTRL + N",   "Night light on/off",       "~/.local/bin/nightlight toggle")
+bind(mainMod .. " + CTRL + I",   "Stay awake on/off",        "~/.local/bin/stay-awake toggle")
+bind(mainMod .. " + CTRL + BACKSPACE", "Gaps on/off",        "~/.local/bin/hypr-toggle no-gaps")
+bind(mainMod .. " + CTRL + A",   "Single-window aspect ratio on/off", "~/.local/bin/hypr-toggle single-window-aspect")
+
+group("Capture")
+bind(mainMod .. " + CTRL + C",   "Capture menu",             "~/.local/bin/desktop-menu capture")
+bind("Print",                    "Screen → clipboard",       "~/.local/bin/capture screen-clip")
+bind(mainMod .. " + F12",        "Screen → ~/Pictures",      "~/.local/bin/capture screen-file")
+bind(mainMod .. " + SHIFT + S",  "Region → clipboard",       "~/.local/bin/capture region-clip")
+bind(mainMod .. " + SHIFT + F12", "Region → ~/Pictures",     "~/.local/bin/capture region-file")
+-- Annotate before saving: swappy opens the grab for arrows/text/blur.
+bind(mainMod .. " + SHIFT + A",  "Region → annotate (swappy)", "~/.local/bin/capture region-edit")
+bind(mainMod .. " + SHIFT + T",  "Copy text from screen (OCR)", "~/.local/bin/capture text")
+bind(mainMod .. " + SHIFT + Q",  "Read a QR code from screen", "~/.local/bin/capture qr")
+bind(mainMod .. " + SHIFT + C",  "Pick a colour",            "~/.local/bin/capture color")
+bind(mainMod .. " + SHIFT + R",  "Record region (again: stop)", "~/.local/bin/screenrecord region")
+bind(mainMod .. " + ALT + R",    "Record screen (again: stop)", "~/.local/bin/screenrecord screen")
+
+group("Windows")
+bind(mainMod .. " + Q",               "Close window",          hl.dsp.window.close())
+bind(mainMod .. " + ESCAPE",          "Fullscreen",            hl.dsp.window.fullscreen())
+bind(mainMod .. " + CTRL + F",        "Maximize (keep gaps and bar)", hl.dsp.window.fullscreen({ mode = "maximized" }))
+bind(mainMod .. " + SHIFT + F",       "Float / tile",          hl.dsp.window.float({ action = "toggle" }))
+bind(mainMod .. " + SHIFT + P",       "Pin (always on top)",   hl.dsp.window.pin())
+bind(mainMod .. " + ALT + P",         "Pop out (float, pin, centre)", "~/.local/bin/window-pop")
+bind(mainMod .. " + SHIFT + space",   "Centre window",         hl.dsp.window.center())
+bind(mainMod .. " + P",               "Pseudo-tile",           hl.dsp.window.pseudo())
+bind(mainMod .. " + J",               "Toggle split direction", hl.dsp.layout("togglesplit"))
+bind("ALT + TAB",                     "Next window",           hl.dsp.window.cycle_next())
+bind("ALT + TAB",                     "Next window (raise)",   hl.dsp.window.bring_to_top())
+bind("ALT + SHIFT + TAB",             "Previous window",       hl.dsp.window.cycle_next({ next = false }))
+bind("ALT + SHIFT + TAB",             "Previous window (raise)", hl.dsp.window.bring_to_top())
+
+group("Focus & move")
+-- ipairs, not pairs: a fixed order keeps the cheatsheet stable.
+for _, key in ipairs({ "left", "right", "up", "down" }) do
+    bind(mainMod .. " + " .. key,             "Focus " .. key,             hl.dsp.focus({ direction = key }))
+    bind(mainMod .. " + SHIFT + " .. key,     "Move window " .. key,       hl.dsp.window.move({ direction = key }))
+    bind(mainMod .. " + ALT + " .. key,       "Swap window " .. key,       hl.dsp.window.swap({ direction = key }))
+    bind(mainMod .. " + SHIFT + ALT + " .. key, "Move workspace to monitor " .. key, hl.dsp.workspace.move({ monitor = key:sub(1, 1) }))
+end
+bind(mainMod .. " + CTRL + left",  "Resize narrower", hl.dsp.window.resize({ x = -40, y = 0 }), { ["repeat"] = true })
+bind(mainMod .. " + CTRL + right", "Resize wider",    hl.dsp.window.resize({ x = 40,  y = 0 }), { ["repeat"] = true })
+bind(mainMod .. " + CTRL + up",    "Resize shorter",  hl.dsp.window.resize({ x = 0,   y = -40 }), { ["repeat"] = true })
+bind(mainMod .. " + CTRL + down",  "Resize taller",   hl.dsp.window.resize({ x = 0,   y = 40 }), { ["repeat"] = true })
+bind("CTRL + ALT + TAB",           "Focus next monitor", hl.dsp.focus({ monitor = "+1" }))
+bind(mainMod .. " + mouse:272",    "Drag to move",    hl.dsp.window.drag(),   { mouse = true })
+bind(mainMod .. " + mouse:273",    "Drag to resize",  hl.dsp.window.resize(), { mouse = true })
+
+group("Layout")
+bind(mainMod .. " + ALT + L",       "Workspace layout: dwindle ⇄ scrolling", "~/.local/bin/workspace-layout toggle")
+bind(mainMod .. " + ALT + equal",   "Scrolling: wider column",    hl.dsp.layout("colresize +0.1"))
+bind(mainMod .. " + ALT + minus",   "Scrolling: narrower column", hl.dsp.layout("colresize -0.1"))
+bind(mainMod .. " + slash",         "Monitor scale up",           "~/.local/bin/monitor-scale up")
+bind(mainMod .. " + ALT + slash",   "Monitor scale down",         "~/.local/bin/monitor-scale down")
+
+group("Groups (tabs)")
+bind(mainMod .. " + G",             "Group / ungroup",            hl.dsp.group.toggle())
+bind(mainMod .. " + ALT + G",       "Take window out of group",   hl.dsp.window.move({ out_of_group = true }))
+bind(mainMod .. " + TAB",           "Next tab in group",          hl.dsp.group.next())
+bind(mainMod .. " + SHIFT + TAB",   "Previous tab in group",      hl.dsp.group.prev())
+
+group("Workspaces")
 for i = 1, 10 do
     local key = i % 10
-    hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
-    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+    bind(mainMod .. " + " .. key,         "Go to workspace " .. i,      hl.dsp.focus({ workspace = i }))
+    bind(mainMod .. " + SHIFT + " .. key, "Move window to workspace " .. i, hl.dsp.window.move({ workspace = i }))
 end
 for i = 1, 5 do
-    hl.bind(mainMod .. " + ALT + " .. i, hl.dsp.window.move({ workspace = i, silent = true }))
+    bind(mainMod .. " + ALT + " .. i, "Send window to workspace " .. i .. " (stay)", hl.dsp.window.move({ workspace = i, silent = true }))
 end
+bind(mainMod .. " + CTRL + TAB",   "Back to previous workspace", hl.dsp.focus({ workspace = "previous" }))
+bind(mainMod .. " + grave",        "Scratchpad terminal",        hl.dsp.workspace.toggle_special("scratchpad"))
+bind(mainMod .. " + SHIFT + grave", "Send window to scratchpad", hl.dsp.window.move({ workspace = "special:scratchpad", silent = true }))
+bind(mainMod .. " + mouse_down",   "Next workspace (wheel)",     hl.dsp.focus({ workspace = "e+1" }))
+bind(mainMod .. " + mouse_up",     "Previous workspace (wheel)", hl.dsp.focus({ workspace = "e-1" }))
 
--- Mouse
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
-hl.bind(mainMod .. " + mouse:272",  hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mainMod .. " + mouse:273",  hl.dsp.window.resize(), { mouse = true })
+-- Hardware keys: described too, but kept out of the cheatsheet's way.
+group("Hardware keys")
+bind("XF86AudioRaiseVolume",  "Volume up",       "swayosd-client --output-volume raise", { locked = true, ["repeat"] = true })
+bind("XF86AudioLowerVolume",  "Volume down",     "swayosd-client --output-volume lower", { locked = true, ["repeat"] = true })
+bind("XF86AudioMute",         "Mute",            "swayosd-client --output-volume mute-toggle", { locked = true })
+bind("XF86AudioMicMute",      "Mute microphone", "swayosd-client --input-volume mute-toggle", { locked = true })
+bind("Caps_Lock",             "Caps Lock OSD",   "swayosd-client --caps-lock", { locked = true })
+bind("XF86MonBrightnessUp",   "Brightness up",   "swayosd-client --brightness raise", { locked = true, ["repeat"] = true })
+bind("XF86MonBrightnessDown", "Brightness down", "swayosd-client --brightness lower", { locked = true, ["repeat"] = true })
+bind("XF86KbdBrightnessUp",   "Keyboard backlight up",   "brightnessctl -d spi::kbd_backlight set 10%+")
+bind("XF86KbdBrightnessDown", "Keyboard backlight down", "brightnessctl -d spi::kbd_backlight set 10%-")
+bind("XF86AudioPlay",  "Play / pause",   "playerctl play-pause", { locked = true })
+bind("XF86AudioPause", "Play / pause",   "playerctl play-pause", { locked = true })
+bind("XF86AudioNext",  "Next track",     "playerctl next", { locked = true })
+bind("XF86AudioPrev",  "Previous track", "playerctl previous", { locked = true })
+bind("XF86AudioStop",  "Stop",           "playerctl stop", { locked = true })
+-- Laptops: closing the lid with an external monitor attached turns the
+-- internal panel off (clamshell); opening it brings the panel back.
+bind("switch:on:Lid Switch",  "Lid closed", "~/.local/bin/lid-switch close", { locked = true })
+bind("switch:off:Lid Switch", "Lid opened", "~/.local/bin/lid-switch open",  { locked = true })
 
 ------------------------------------------------------------------- DEVICES --
 -- Prevent Razer keyboard from registering as a pointer (causes double cursor)
 hl.device({ name = "razer-razer-blade-stealth-keyboard-1", enabled = false })
+
+-------------------------------------------------- THEME, TOGGLES, LAYOUTS --
+-- theme.lua is written by desktop-theme (border colours, GTK_THEME).
+optional("theme")
+
+-- Toggles and per-workspace layouts are state, not config: small Lua files
+-- under ~/.local/state/hypr that hypr-toggle and workspace-layout write and
+-- remove. Loaded on every (re)load so they survive restarts and redeploys.
+local STATE = (os.getenv("XDG_STATE_HOME") or (os.getenv("HOME") .. "/.local/state")) .. "/hypr"
+local function load_dir(dir)
+    local p = io.popen('ls -1 "' .. dir .. '" 2>/dev/null')
+    if not p then return end
+    for name in p:lines() do
+        if name:match("%.lua$") then
+            local ok, err = pcall(dofile, dir .. "/" .. name)
+            if not ok then print("hyprland.lua: " .. dir .. "/" .. name .. ": " .. tostring(err)) end
+        end
+    end
+    p:close()
+end
+load_dir(STATE .. "/toggles")
+load_dir(STATE .. "/layouts")
 
 ------------------------------------------------ MACHINE-LOCAL OVERRIDES ----
 -- Last, so anything here wins over the settings above. setup.sh creates the
@@ -354,3 +501,8 @@ hl.device({ name = "razer-razer-blade-stealth-keyboard-1", enabled = false })
 -- to false and the compositor filled its log with "Backend requires blit, but
 -- cursor blit failed" and froze the screen.
 optional("local")
+
+-- After local.lua on purpose: a scale chosen with Super + / (monitor-scale) and
+-- clamshell mode (lid-switch) are deliberate, current choices; `monitor-scale
+-- reset` and opening the lid remove them again.
+load_dir(STATE .. "/monitors")

@@ -1,10 +1,20 @@
 #!/bin/bash
-# Lock screen with blurred desktop background (fast)
+# Lock the session. hyprlock when installed (themed, ~/.config/hypr/
+# hyprlock.conf; it covers monitors that appear while locked by itself),
+# otherwise gtklock with a blurred screenshot.
 #
 # --relock: replace a running gtklock with a fresh one on the same background
 # (lock-relock runs this after a monitor reconnects). SIGKILL, not SIGTERM, so
 # the old client cannot unlock on its way out: Hyprland holds the session
 # locked until the new one takes over (misc:allow_session_lock_restore).
+# hyprlock needs none of that, so --relock leaves it alone.
+
+pgrep -x screensaver-run >/dev/null && pkill -x screensaver-run
+
+if [ "$1" != "--relock" ] && command -v hyprlock >/dev/null; then
+    pidof hyprlock >/dev/null || exec hyprlock
+    exit 0
+fi
 
 TMPIMG="/tmp/lockscreen-bg.png"
 
@@ -20,5 +30,4 @@ else
         convert "$TMPIMG" -blur 0x4 -resize 400% -brightness-contrast -5x-5 "$TMPIMG"
 fi
 
-# gtklock with Dracula-themed style and blurred background
 gtklock -d -s ~/.config/gtklock/style.css -b "$TMPIMG" -H -T 5

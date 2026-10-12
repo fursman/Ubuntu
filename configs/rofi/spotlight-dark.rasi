@@ -1,13 +1,11 @@
+/* Spotlight-style launcher and menu theme. Colours come from the desktop
+ * theme: desktop-theme writes ~/.config/rofi/colors.rasi. */
+@import "~/.config/rofi/colors.rasi"
+
 * {
-    font:   "Montserrat 12";
-    bg0:    #242424E6;
-    bg1:    #7E7E7E80;
-    bg2:    #0860f2E6;
-    fg0:    #DEDEDE;
-    fg1:    #FFFFFF;
-    fg2:    #DEDEDE80;
+    font:   "JetBrainsMono Nerd Font 13";
     background-color:   transparent;
-    text-color:         @fg0;
+    text-color:         @th-fg;
     margin:     0;
     padding:    0;
     spacing:    0;
@@ -18,17 +16,25 @@ configuration {
 }
 
 window {
-    background-color:   @bg0;
+    background-color:   @th-bg;
+    border:         2px;
+    border-color:   @th-border;
     location:       center;
-    width:          640;
-    border-radius:  8;
+    width:          760;
+    border-radius:  14;
 }
 
 inputbar {
-    font:       "Montserrat 20";
-    padding:    12px;
-    spacing:    12px;
-    children:   [ icon-search, entry ];
+    font:       "JetBrainsMono Nerd Font 18";
+    padding:    14px 18px;
+    spacing:    14px;
+    children:   [ icon-search, prompt, entry ];
+    border:         0 0 1px 0;
+    border-color:   @th-border;
+}
+
+prompt {
+    text-color: @th-accent;
 }
 
 icon-search {
@@ -37,53 +43,56 @@ icon-search {
     size: 28px;
 }
 
-icon-search, entry, element-icon, element-text {
+icon-search, prompt, entry, element-icon, element-text {
     vertical-align: 0.5;
 }
 
 entry {
     font:   inherit;
     placeholder         : "Search";
-    placeholder-color   : @fg2;
+    placeholder-color   : @th-fg-dim;
 }
 
 message {
-    border:             2px 0 0;
-    border-color:       @bg1;
-    background-color:   @bg1;
+    background-color:   @th-bg-alt;
+    border:             0 0 1px 0;
+    border-color:       @th-border;
 }
 
 textbox {
-    padding:    8px 24px;
+    padding:    10px 22px;
+    text-color: @th-fg-dim;
 }
 
 listview {
     lines:      10;
     columns:    1;
     fixed-height:   false;
-    border:         1px 0 0;
-    border-color:   @bg1;
+    padding:    8px;
+    scrollbar:  false;
 }
 
 element {
-    padding:            8px 16px;
+    padding:            10px 16px;
     spacing:            16px;
+    border-radius:      10px;
     background-color:   transparent;
 }
 
 element normal active {
-    text-color: @bg2;
+    text-color: @th-accent;
 }
 
 element selected normal, element selected active {
-    background-color:   @bg2;
-    text-color:         @fg1;
+    background-color:   @th-accent;
+    text-color:         @th-on-accent;
 }
 
 element-icon {
-    size:   1em;
+    size:   1.4em;
 }
 
 element-text {
     text-color: inherit;
+    highlight:  bold underline;
 }

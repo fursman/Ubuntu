@@ -1,0 +1,6 @@
+#!/bin/bash
+# Pick an emoji (or symbol) and type it into the focused window; it is also
+# left on the clipboard. Super + period.
+command -v rofimoji >/dev/null || { notify-send -u normal "Emoji picker unavailable" "Install rofimoji"; exit 1; }
+exec rofimoji --selector rofi --selector-args="-theme spotlight-dark" \
+    --clipboarder wl-copy --typer wtype --action type copy --skin-tone neutral

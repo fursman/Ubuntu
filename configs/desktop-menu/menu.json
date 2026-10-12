@@ -1,0 +1,149 @@
+{
+  "root": {
+    "title": "Menu",
+    "items": [
+      { "icon": "󰀻", "label": "Apps", "exec": "rofi -show drun -theme spotlight-dark" },
+      { "icon": "󰄀", "label": "Capture", "menu": "capture" },
+      { "icon": "󰔡", "label": "Toggles", "menu": "toggle" },
+      { "icon": "󰏘", "label": "Style", "menu": "style" },
+      { "icon": "󱁤", "label": "Tools", "menu": "tools" },
+      { "icon": "󰒓", "label": "Setup", "menu": "setup" },
+      { "icon": "󰚰", "label": "Update", "menu": "update" },
+      { "icon": "󰌌", "label": "Keybindings", "exec": "hypr-cheatsheet" },
+      { "icon": "󰋽", "label": "About this computer", "exec": "launch-tui bash -c 'fastfetch; read -rsn1'" },
+      { "icon": "󰐥", "label": "Power", "menu": "system" }
+    ]
+  },
+
+  "capture": {
+    "title": "Capture",
+    "items": [
+      { "icon": "󰹑", "label": "Region → clipboard", "exec": "capture region-clip" },
+      { "icon": "󰹑", "label": "Region → ~/Pictures", "exec": "capture region-file" },
+      { "icon": "󰍹", "label": "Screen → clipboard", "exec": "sleep 0.3; capture screen-clip" },
+      { "icon": "󰍹", "label": "Screen → ~/Pictures", "exec": "sleep 0.3; capture screen-file" },
+      { "icon": "󰖯", "label": "Active window → clipboard", "exec": "sleep 0.3; capture window-clip" },
+      { "icon": "󰏫", "label": "Region → annotate", "exec": "capture region-edit" },
+      { "icon": "󰊄", "label": "Copy text from screen (OCR)", "exec": "capture text" },
+      { "icon": "󰐲", "label": "Read a QR code", "exec": "capture qr" },
+      { "icon": "󰈊", "label": "Pick a colour", "exec": "capture color" },
+      { "icon": "󰑋", "label": "Stop recording", "exec": "screenrecord stop", "when": "pgrep -x wf-recorder" },
+      { "icon": "󰑊", "label": "Record a region", "exec": "screenrecord region", "when": "! pgrep -x wf-recorder" },
+      { "icon": "󰑊", "label": "Record the screen", "exec": "screenrecord screen", "when": "! pgrep -x wf-recorder" },
+      { "icon": "󰕾", "label": "Record the screen + desktop audio", "exec": "screenrecord screen desktop", "when": "! pgrep -x wf-recorder" },
+      { "icon": "󰍬", "label": "Record a region + microphone", "exec": "screenrecord region mic", "when": "! pgrep -x wf-recorder" },
+      { "icon": "󰉏", "label": "Open screenshots folder", "exec": "xdg-open ~/Pictures" },
+      { "icon": "󰕧", "label": "Open recordings folder", "exec": "xdg-open ~/Videos" }
+    ]
+  },
+
+  "toggle": {
+    "title": "Toggles",
+    "items": [
+      { "icon": "󰖔", "label": "Night light", "exec": "nightlight toggle", "state": "nightlight status | jq -r .class", "stay": true },
+      { "icon": "󰅶", "label": "Stay awake", "exec": "stay-awake toggle", "state": "stay-awake status | jq -r .class", "stay": true },
+      { "icon": "󰂛", "label": "Do not disturb", "exec": "swaync-client -d -sw", "state": "[ \"$(swaync-client -D -sw)\" = true ] && echo on || echo off", "stay": true },
+      { "icon": "󱄄", "label": "Screensaver before lock", "exec": "screensaver toggle", "state": "screensaver status", "stay": true },
+      { "icon": "󰕰", "label": "Workspace layout (this workspace)", "exec": "workspace-layout toggle", "state": "workspace-layout current", "stay": true },
+      { "generate": "hypr-toggle --list | awk -F'\\t' '{split($3, d, \": \"); printf \"%s\\thypr-toggle %s\\t󰘵\\t%s\\n\", d[1], $1, $2}'", "stay": true },
+      { "icon": "󰍹", "label": "Monitor scale up", "exec": "monitor-scale up", "state": "hyprctl monitors -j | jq -r '.[] | select(.focused) | \"×\\(.scale)\"'", "stay": true },
+      { "icon": "󰍺", "label": "Monitor scale down", "exec": "monitor-scale down", "stay": true },
+      { "icon": "󰑓", "label": "Monitor scale reset", "exec": "monitor-scale reset", "stay": true }
+    ]
+  },
+
+  "style": {
+    "title": "Style",
+    "items": [
+      { "icon": "󰏘", "label": "Theme", "menu": "theme", "state": "desktop-theme current" },
+      { "icon": "󰸉", "label": "Wallpaper", "menu": "wallpaper" },
+      { "icon": "󰒭", "label": "Next theme", "exec": "desktop-theme next", "stay": true },
+      { "icon": "󰒮", "label": "Previous theme", "exec": "desktop-theme prev", "stay": true },
+      { "icon": "󰇚", "label": "Get / update omarchy's themes", "exec": "notify-send -a desktop-theme 'Fetching themes…' 'About 280 MB the first time'; desktop-theme sync && notify-send -a desktop-theme 'Themes updated' \"$(desktop-theme list | wc -l) themes\"" },
+      { "icon": "󰷈", "label": "Edit my own theme templates", "exec": "mkdir -p ~/.config/desktop-theme/templates ~/.config/desktop-theme/themes && xdg-open ~/.config/desktop-theme" }
+    ]
+  },
+
+  "theme": {
+    "title": "Theme",
+    "message": "Any omarchy theme works here. More: Style › Get / update omarchy's themes",
+    "items": [
+      { "generate": "desktop-theme menu-themes", "stay": true }
+    ]
+  },
+
+  "wallpaper": {
+    "title": "Wallpaper",
+    "items": [
+      { "generate": "desktop-theme menu-wallpapers", "stay": true }
+    ]
+  },
+
+  "tools": {
+    "title": "Tools",
+    "items": [
+      { "icon": "󰞅", "label": "Emoji picker", "exec": "emoji-picker" },
+      { "icon": "󰅌", "label": "Clipboard history", "exec": "cliphist list | rofi -dmenu -theme spotlight-dark -p Clipboard | cliphist decode | wl-copy" },
+      { "icon": "󰃰", "label": "Remind me…", "input": "e.g.  25m Tea's ready   ·   1h30m Stand up", "exec": "reminder \"$INPUT\"" },
+      { "icon": "󰔛", "label": "Pending reminders", "exec": "notify-send -a reminder 'Pending reminders' \"$(reminder --list)\"" },
+      { "icon": "󰃬", "label": "Calculator", "exec": "gnome-calculator", "when": "command -v gnome-calculator" },
+      { "icon": "󰖟", "label": "Web apps", "menu": "webapps" },
+      { "icon": "󰄨", "label": "System monitor (btop)", "exec": "launch-tui btop" }
+    ]
+  },
+
+  "webapps": {
+    "title": "Web apps",
+    "message": "A site in its own window, with a launcher entry (Chromium --app)",
+    "items": [
+      { "icon": "󰐕", "label": "Add a web app…", "input": "Name  https://address   e.g.  WhatsApp https://web.whatsapp.com", "exec": "name=\"${INPUT% *}\"; url=\"${INPUT##* }\"; webapp-install \"$name\" \"$url\"" },
+      { "generate": "for f in ~/.local/share/applications/webapp-*.desktop; do [ -f \"$f\" ] || continue; n=$(sed -n 's/^Name=//p' \"$f\"); printf '%s\\tgtk-launch %s\\t󰖟\\t\\n' \"$n\" \"$(basename \"$f\" .desktop)\"; done" },
+      { "icon": "󰆴", "label": "Remove a web app…", "input": "Name of the web app to remove", "exec": "webapp-install --remove \"$INPUT\"" }
+    ]
+  },
+
+  "setup": {
+    "title": "Setup",
+    "items": [
+      { "icon": "󰕾", "label": "Audio", "exec": "pavucontrol" },
+      { "icon": "󰂯", "label": "Bluetooth", "exec": "open-bluetooth-settings" },
+      { "icon": "󰖩", "label": "Network", "exec": "open-network-settings" },
+      { "icon": "󰐲", "label": "Share Wi-Fi as a QR code", "exec": "wifi-qr", "when": "nmcli -t -f active dev wifi 2>/dev/null | grep -q yes" },
+      { "icon": "󰾅", "label": "Power profile", "menu": "power-profile", "when": "command -v powerprofilesctl", "state": "powerprofilesctl get" },
+      { "icon": "󰍹", "label": "Wireless display", "exec": "wireless-display", "when": "[ -x ~/.local/bin/wireless-display ]" },
+      { "icon": "󰒓", "label": "Edit machine-local Hyprland settings", "exec": "launch-tui ${EDITOR:-nano} ~/.config/hypr/local.lua" },
+      { "icon": "󰍜", "label": "Edit my menu additions", "exec": "[ -f ~/.config/desktop-menu/local.json ] || echo '{}' > ~/.config/desktop-menu/local.json; launch-tui ${EDITOR:-nano} ~/.config/desktop-menu/local.json" },
+      { "icon": "󰑓", "label": "Reload Hyprland", "exec": "hyprctl reload" },
+      { "icon": "󰑓", "label": "Restart the bar", "exec": "restart-waybar" }
+    ]
+  },
+
+  "power-profile": {
+    "title": "Power profile",
+    "items": [
+      { "generate": "cur=$(powerprofilesctl get); for p in $(powerprofilesctl list | sed -n 's/^[* ] *\\([a-z-]*\\):$/\\1/p'); do i=󰾅; [ $p = performance ] && i=󰓅; [ $p = power-saver ] && i=󰾆; s=; [ $p = $cur ] && s=current; printf '%s\\tpowerprofilesctl set %s; pkill -RTMIN+11 -x waybar\\t%s\\t%s\\n' $p $p $i $s; done", "stay": true }
+    ]
+  },
+
+  "update": {
+    "title": "Update",
+    "items": [
+      { "icon": "󰚰", "label": "Update Ubuntu (apt)", "exec": "launch-tui bash -c 'sudo apt update && sudo apt full-upgrade; echo; read -rsn1 -p \"Done — press a key\"'" },
+      { "icon": "󰏖", "label": "Update Flatpaks", "exec": "launch-tui bash -c 'flatpak update; echo; read -rsn1 -p \"Done — press a key\"'", "when": "command -v flatpak" },
+      { "icon": "󰊢", "label": "Update this desktop (git pull + redeploy)", "exec": "launch-tui bash -c 'cd ~/Ubuntu && git pull --ff-only && ./setup.sh --configs-only; echo; read -rsn1 -p \"Done — press a key\"'", "when": "[ -d ~/Ubuntu/.git ]" },
+      { "icon": "󰏘", "label": "Update omarchy's themes", "exec": "desktop-theme sync && notify-send -a desktop-theme 'Themes updated'" }
+    ]
+  },
+
+  "system": {
+    "title": "Power",
+    "items": [
+      { "icon": "󰌾", "label": "Lock", "exec": "lock-screen" },
+      { "icon": "󰒲", "label": "Suspend", "exec": "systemctl suspend" },
+      { "icon": "󰋊", "label": "Hibernate", "exec": "systemctl hibernate", "when": "[ \"$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanHibernate 2>/dev/null)\" = 's \"yes\"' ]" },
+      { "icon": "󰍃", "label": "Log out", "exec": "hyprctl dispatch 'hl.dsp.exit()'", "confirm": true },
+      { "icon": "󰜉", "label": "Restart", "exec": "systemctl reboot", "confirm": true },
+      { "icon": "󰐥", "label": "Shut down", "exec": "systemctl poweroff", "confirm": true }
+    ]
+  }
+}

@@ -2,9 +2,78 @@
     "layer": "top",
     "position": "top",
     "height": 30,
-    "modules-left": ["custom/voice", "hyprland/workspaces", "wlr/taskbar"],
+    "modules-left": ["custom/menu", "custom/voice", "hyprland/workspaces", "wlr/taskbar"],
     "modules-center": ["hyprland/window"],
-    "modules-right": ["custom/caps-sudo", "tray", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "backlight", "battery", "custom/date", "custom/time", "custom/media", "custom/notification"],
+    // Indicators (recording, night light, stay awake, updates) are empty --
+    // invisible -- until switched on, so the bar only grows when it has news.
+    "modules-right": ["custom/recording", "custom/caps-sudo", "tray", "custom/nightlight", "custom/stay-awake", "custom/updates", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "pulseaudio#mic", "backlight", "battery", "power-profiles-daemon", "custom/weather", "custom/date", "custom/time", "custom/media", "custom/notification"],
+
+    "custom/menu": {
+        "format": "",
+        "tooltip-format": "Menu (Super + Alt + Space) — right-click: keybindings",
+        "on-click": "~/.local/bin/desktop-menu",
+        "on-click-right": "~/.local/bin/hypr-cheatsheet"
+    },
+
+    "custom/recording": {
+        "exec": "~/.local/bin/screenrecord status",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 8,
+        "on-click": "~/.local/bin/screenrecord stop"
+    },
+
+    "custom/nightlight": {
+        "exec": "~/.local/bin/nightlight status | jq -c 'if .class == \"off\" then .text = \"\" else . end'",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "~/.local/bin/nightlight toggle"
+    },
+
+    "custom/stay-awake": {
+        "exec": "~/.local/bin/stay-awake status | jq -c 'if .class == \"off\" then .text = \"\" else . end'",
+        "return-type": "json",
+        "interval": 30,
+        "signal": 10,
+        "on-click": "~/.local/bin/stay-awake toggle"
+    },
+
+    "custom/updates": {
+        "exec": "~/.local/bin/bar-status updates",
+        "return-type": "json",
+        "interval": 1800,
+        "on-click": "~/.local/bin/desktop-menu update"
+    },
+
+    "custom/weather": {
+        "exec": "~/.local/bin/bar-status weather",
+        "return-type": "json",
+        "interval": 900,
+        "on-click": "~/.local/bin/launch-tui bash -c 'curl -s wttr.in/?F; read -rsn1'"
+    },
+
+    "pulseaudio#mic": {
+        "format": "{format_source}",
+        "format-source": "󰍬 {volume}%",
+        "format-source-muted": "󰍭",
+        "tooltip-format": "Microphone: {source_desc} — click to mute, scroll for level",
+        "on-click": "swayosd-client --input-volume mute-toggle",
+        "on-scroll-up": "swayosd-client --input-volume raise",
+        "on-scroll-down": "swayosd-client --input-volume lower",
+        "on-click-right": "pavucontrol --tab=4"
+    },
+
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile} — click to cycle",
+        "format-icons": {
+            "default": "󰾅",
+            "performance": "󰓅",
+            "balanced": "󰾅",
+            "power-saver": "󰾆"
+        }
+    },
 
     "custom/caps-sudo": {
         // Silently inert unless caps-sudo is installed (it is opt-in, see
@@ -131,9 +200,9 @@
     },
 
     "custom/date": {
-        "interval": 10,
+        "interval": 60,
         "return-type": "json",
-        "exec": "date '+{\"text\":\"󰃭 %e %b %Y\",\"tooltip\":\"%A %e %B %Y\"}'"
+        "exec": "~/.local/bin/bar-status date"
     },
 
     "cpu": {
@@ -166,6 +235,8 @@
 
     "pulseaudio": {
         "scroll-step": 1,
+        "on-click": "pavucontrol",
+        "on-click-right": "swayosd-client --output-volume mute-toggle",
         "format": "{icon} {volume}%",
         "format-bluetooth": "{icon} {volume}%",
         "format-muted": "󰖁",

@@ -2,8 +2,15 @@
 
 **Stock Ubuntu to Hyprland desktop -- one script setup.**
 
-Transform a fresh Ubuntu **26.04 LTS** install into a fully configured, Dracula-themed
+Transform a fresh Ubuntu **26.04 LTS** install into a fully configured, themeable
 Hyprland tiling compositor desktop with one command.
+
+Many of the desktop's conveniences -- the system menu, quick settings, themes,
+toggles, capture tools, screensaver -- are modelled on
+[omarchy](https://github.com/basecamp/omarchy), DHH's Arch-based Hyprland
+distribution, rebuilt here from Ubuntu packages (waybar, swaync, rofi, the
+Hyprland PPA). Omarchy's themes work here unchanged: `desktop-theme sync`
+fetches its whole collection.
 
 Three scripts live here, deliberately separate:
 
@@ -19,24 +26,27 @@ Three scripts live here, deliberately separate:
 
 | Component | Tool |
 |-----------|------|
-| Compositor | **Hyprland** -- dynamic tiling Wayland compositor |
-| Status Bar | **Waybar** -- customizable status bar with system monitors |
+| Compositor | **Hyprland** -- dynamic tiling Wayland compositor; per-workspace dwindle or scrolling layout |
+| Status Bar | **Waybar** -- system monitors, weather, calendar, and indicators that only appear while something is on |
+| System menu | **desktop-menu** (rofi) -- one searchable menu: capture, toggles, themes, wallpapers, tools, setup, updates, power |
+| Quick settings | **SwayNC** -- toggle grid, volume (per app), brightness on laptops, media, then notifications |
+| Themes | **desktop-theme** -- omarchy-format themes recolour everything at once; Dracula by default |
 | Terminal | **Kitty** -- GPU-accelerated terminal (50% transparent, blurred) |
-| Launcher | **Rofi** -- macOS Spotlight-style app launcher |
+| Launcher | **Rofi** -- Spotlight-style app launcher |
 | File Manager | **Thunar** -- lightweight file manager |
-| Notifications | **SwayNC** -- Dracula-themed notification center |
-| Lock Screen | **gtklock** -- blurred screenshot lock with Dracula styling |
-| Logout Menu | **wlogout** -- graphical session menu (lock/logout/suspend/hibernate/shutdown/reboot) |
+| Lock Screen | **hyprlock** -- themed, blurred lock (gtklock where hyprlock is unavailable) |
+| Idle | **hypridle** -- screensaver at 55 min, lock at 60, screen off at 61, lock before sleep |
+| Screensaver | **terminaltexteffects** -- animated banner in a fullscreen terminal |
+| Night light | **hyprsunset** -- warm screen on a key or a click |
 | Clipboard | **cliphist** -- clipboard history (text + images) via Rofi |
-| Screenshots | **grim + slurp** -- region and full-screen capture |
-| Recording | **wf-recorder** -- screen recording |
+| Capture | **grim + slurp + hyprpicker** -- frozen-screen region grabs, OCR (**tesseract**), QR codes (**zbar**), colour picker, **swappy** annotation |
+| Recording | **wf-recorder** -- region or screen, optional desktop/mic audio, bar indicator |
+| Emoji | **rofimoji** -- emoji picker that types into the focused window |
 | OSD | **SwayOSD** -- on-screen display for volume, brightness, caps lock |
-| Theme | **Dracula** -- GTK theme + icon theme |
 | Font | **JetBrainsMono Nerd Font** |
-| Wallpaper | **awww** -- animated wallpaper daemon, Donut collection from [desktop-assets](https://github.com/fursman/Desktop-Assets) |
-| Idle/Lock | **swayidle** -- auto-lock at 60 min, DPMS off at 61 min, lock before sleep |
-| Annotation | **swappy** -- mark up a region grab without leaving the keyboard |
-| Auth prompts | **hyprpolkitagent** -- polkit agent, so privilege prompts actually appear |
+| Wallpaper | **awww** -- animated wallpaper daemon; per-theme wallpapers plus the Donut collection from [desktop-assets](https://github.com/fursman/Desktop-Assets) |
+| Laptops | Low-battery warnings, power profile per power source, clamshell mode |
+| Auth prompts | **mate-polkit** -- polkit agent, so privilege prompts actually appear |
 | Snapshots | **Timeshift** -- rsync system snapshots for rollback |
 | Wireless display | **GNOME Network Displays** -- Miracast mirroring to a TV, see [docs/WIRELESS-DISPLAY.md](docs/WIRELESS-DISPLAY.md) |
 | CapsLock (optional) | **caps-sudo** -- CapsLock arms/disarms passwordless `sudo`, LED = danger light. Opt-in, not run by `setup.sh`, see [docs/CAPS-SUDO.md](docs/CAPS-SUDO.md) |
@@ -61,7 +71,9 @@ chmod +x setup.sh
 
 Log out, select **Hyprland** from your display manager, and log back in.
 
-Press **Super + Space** for a searchable keybind cheatsheet.
+Press **Super + Space** for a searchable keybind cheatsheet, **Super + Alt +
+Space** (or the Ubuntu logo at the left of the bar) for the system menu, and
+**Super + N** for quick settings.
 
 Useful flags:
 
@@ -70,11 +82,9 @@ Useful flags:
 ./setup.sh --no-nvidia      # skip the GPU driver step
 ```
 
-Already in a Hyprland session? Apply a config redeploy without logging out:
-
-```bash
-hyprctl reload && pkill -SIGUSR2 waybar
-```
+A `--configs-only` redeploy inside a running session re-renders the current
+theme and reloads Hyprland, waybar, swaync and kitty by itself; nothing else
+is needed. (Menu › Update › *Update this desktop* does `git pull` + this.)
 
 ## Setup Steps
 
@@ -84,19 +94,22 @@ the missing work, so re-running is fast and quiet.
 1. **Repositories** -- adds the Hyprland PPA for the *detected* release codename,
    falling back to the archive if that series does not exist yet
 2. **Packages** -- compositor, bar, launcher, portals, notification centre,
-   polkit agent, toolchain
+   polkit agent, toolchain; hypridle, hyprlock, hyprsunset and hyprpicker from
+   the PPA; tesseract, zbar, qrencode, rofimoji, terminaltexteffects, jq
 3. **Razer hardware** -- OpenRazer, only if Razer hardware is actually present
 4. **NVIDIA driver** -- recommended version via `ubuntu-drivers`, signed prebuilt
    modules, then `apt-mark manual` so `autoremove` cannot orphan it
 5. **Node.js 22** -- via NodeSource
 6. **Fonts** -- JetBrainsMono Nerd Font v3.4.0
-7. **GTK/icon theme** -- Dracula
-8. **Config files** -- dotfiles, the shared colour palette, and a machine-local
-   `env-local.conf` holding GPU-specific environment
-9. **Helper scripts + session wiring** -- `~/.local/bin` scripts, polkit agent
+7. **GTK/icon theme** -- Dracula (other themes use Ubuntu's own Yaru accents)
+8. **Config files** -- dotfiles, Hyprland toggles, the menu, and a
+   machine-local `env-local.conf` holding GPU-specific environment
+9. **Helper scripts + session wiring** -- `~/.local/bin` scripts, then the
+   theme is rendered into every app (`desktop-theme reapply`), polkit agent
    selection, masking `mako` so it cannot fight swaync for the notification bus
 10. **Wallpaper daemon, assets, tuning** -- builds `awww`, pulls wallpapers and
-    wlogout icons, applies sysctl and NVMe scheduler tuning
+    wlogout icons, fetches omarchy's themes, applies sysctl and NVMe scheduler
+    tuning
 
 ### Why `sway-notification-center` is no longer built from source
 
@@ -105,117 +118,268 @@ setup used to compile by hand. The whole meson/ninja build step is gone.
 
 ## Keybinds
 
-Press **Super + Space** to see all keybinds in a searchable Rofi menu.
+Press **Super + Space** to see all keybinds in a searchable Rofi menu. It is
+generated from the running Hyprland: every bind in `hyprland.lua` carries a
+description, so the help cannot drift from the keys. The tables below come from
+the same place (`hypr-cheatsheet --markdown`). Also: `3-finger swipe` switches
+workspaces, and the media/volume/brightness keys drive SwayOSD.
 
-### Apps
+#### Help
 
 | Key | Action |
 |-----|--------|
-| `Super + Enter` | App Launcher (Rofi) |
-| `Super + T` | Terminal (Kitty) |
+| `Super + Space` | Keybinding cheatsheet |
+| `Super + Alt + Space` | System menu |
+
+#### Apps
+
+| Key | Action |
+|-----|--------|
+| `Super + Enter` | App launcher |
+| `Super + T` | Terminal (kitty) |
 | `Super + B` | Firefox |
 | `Super + Alt + B` | Chromium |
-| `Super + C` | Claude (desktop app) |
-| `Super + F` | File Manager (Thunar) |
-| `Super + O` | Audio Settings (pavucontrol) |
-| `Super + S` | Signal |
-| `Super + R` | Pika Backup |
+| `Super + C` | Claude |
+| `Super + F` | File manager (Thunar) |
 | `Super + K` | Passwords (Seahorse) |
+| `Super + O` | Audio settings |
+| `Super + S` | Signal |
+| `Super + R` | Backups (Pika) |
+| `Super + Shift + B` | System monitor (btop) |
 
-### Voice assistant
-
-Inert unless [the assistant](https://github.com/fursman/Assistant) is installed.
-
-| Key | Action |
-|-----|--------|
-| `Super` (tap) | Voice mode on / off |
-| `Super + A` | Conversation panel |
-| `Super + M` | Swap model (local / Claude) |
-| `Super + Shift + V` | New conversation |
-
-### Windows
+#### Tools
 
 | Key | Action |
 |-----|--------|
-| `Super + Q` | Close Window |
-| `Super + Escape` | Fullscreen |
-| `Super + Shift + F` | Toggle Floating |
-| `Super + Shift + P` | Pin (Always on Top) |
-| `Super + Shift + Space` | Center Window |
+| `Super + V` | Clipboard history |
+| `Super + .` | Emoji picker |
+| `Super + N` | Notifications & quick settings |
+| `Super + Shift + N` | Do not disturb on/off |
+| `Super + L` | Lock screen |
+| `Super + X` | Power menu |
+
+#### Capture
+
+| Key | Action |
+|-----|--------|
+| `Super + Ctrl + C` | Capture menu |
+| `PrtSc` | Screen → clipboard |
+| `Super + F12` | Screen → ~/Pictures |
+| `Super + Shift + S` | Region → clipboard |
+| `Super + Shift + F12` | Region → ~/Pictures |
+| `Super + Shift + A` | Region → annotate (swappy) |
+| `Super + Shift + T` | Copy text from screen (OCR) |
+| `Super + Shift + Q` | Read a QR code from screen |
+| `Super + Shift + C` | Pick a colour |
+| `Super + Shift + R` | Record region (again: stop) |
+| `Super + Alt + R` | Record screen (again: stop) |
+
+#### Windows
+
+| Key | Action |
+|-----|--------|
+| `Super + Q` | Close window |
+| `Super + Esc` | Fullscreen |
+| `Super + Ctrl + F` | Maximize (keep gaps and bar) |
+| `Super + Shift + F` | Float / tile |
+| `Super + Shift + P` | Pin (always on top) |
+| `Super + Alt + P` | Pop out (float, pin, centre) |
+| `Super + Shift + Space` | Centre window |
 | `Super + P` | Pseudo-tile |
-| `Super + J` | Toggle Split |
-| `Super + G` | Group Windows |
-| `Super + Tab` | Cycle Grouped |
+| `Super + J` | Toggle split direction |
+| `Alt + Tab` | Next window |
+| `Alt + Shift + Tab` | Previous window |
 
-### Move & Resize
-
-| Key | Action |
-|-----|--------|
-| `Super + Arrow` | Focus Direction |
-| `Super + Shift + Arrow` | Move Window |
-| `Super + Ctrl + Arrow` | Resize Window |
-| `Super + Drag LMB` | Move (Mouse) |
-| `Super + Drag RMB` | Resize (Mouse) |
-
-### Workspaces
+#### Focus & move
 
 | Key | Action |
 |-----|--------|
-| `Super + 1-0` | Switch Workspace 1-10 |
-| `Super + Shift + 1-0` | Move Window to Workspace |
-| `Super + Alt + 1-5` | Move Silently (don't follow) |
-| `Super + Scroll` | Cycle Workspaces |
-| `3-Finger Swipe` | Swipe Workspaces |
-| `` Super + ` `` | Dropdown Terminal (scratchpad) |
+| `Super + ←→↑↓` | Focus left/right/up/down |
+| `Super + Shift + ←→↑↓` | Move window left/right/up/down |
+| `Super + Alt + ←→↑↓` | Swap window left/right/up/down |
+| `Super + Alt + Shift + ←→↑↓` | Move workspace to monitor left/right/up/down |
+| `Super + Ctrl + ←` | Resize narrower |
+| `Super + Ctrl + →` | Resize wider |
+| `Super + Ctrl + ↑` | Resize shorter |
+| `Super + Ctrl + ↓` | Resize taller |
+| `Ctrl + Alt + Tab` | Focus next monitor |
+| `Super + Left-drag` | Drag to move |
+| `Super + Right-drag` | Drag to resize |
 
-### Screenshots & Recording
-
-| Key | Action |
-|-----|--------|
-| `Print` | Full Screen -> Clipboard |
-| `Super + F12` | Full Screen -> File |
-| `Super + Shift + S` | Region -> Clipboard |
-| `Super + Shift + F12` | Region -> File |
-| `Super + Shift + A` | Region -> Annotate (Swappy) |
-| `Super + Shift + R` | Record Region (toggle) |
-| `Super + Alt + R` | Record Full Screen (toggle) |
-
-### Utilities
+#### Layout
 
 | Key | Action |
 |-----|--------|
-| `Super + Space` | Keybind Cheatsheet |
-| `Super + V` | Clipboard History |
-| `Super + N` | Notification Center |
-| `Super + Shift + C` | Color Picker |
-| `Super + L` | Lock Screen |
-| `Super + X` | Logout Menu |
+| `Super + Alt + L` | Workspace layout: dwindle ⇄ scrolling |
+| `Super + Alt + =` | Scrolling: wider column |
+| `Super + Alt + -` | Scrolling: narrower column |
+| `Super + /` | Monitor scale up |
+| `Super + Alt + /` | Monitor scale down |
 
-Also on `PATH`: `wireless-display` (Miracast mirroring), `wallpaper-cycle`,
-`restart-waybar`, `hypr-cheatsheet`.
-
-### Media & Hardware Keys
+#### Groups (tabs)
 
 | Key | Action |
 |-----|--------|
-| `Volume Up/Down/Mute` | Volume control (SwayOSD) |
-| `Mic Mute` | Microphone toggle (SwayOSD) |
-| `Caps Lock` | Caps indicator (SwayOSD) |
-| `Brightness Up/Down` | Brightness control (SwayOSD) |
-| `Play/Pause/Next/Prev` | Media control (playerctl) |
+| `Super + G` | Group / ungroup |
+| `Super + Alt + G` | Take window out of group |
+| `Super + Tab` | Next tab in group |
+| `Super + Shift + Tab` | Previous tab in group |
+
+#### Workspaces
+
+| Key | Action |
+|-----|--------|
+| `Super + 1…0` | Go to workspace 1–10 |
+| `Super + Shift + 1…0` | Move window to workspace 1–10 |
+| `Super + Alt + 1…5` | Send window to workspace 1–5 (stay) |
+| `Super + Ctrl + Tab` | Back to previous workspace |
+| `Super + `` | Scratchpad terminal |
+| `Super + Shift + `` | Send window to scratchpad |
+| `Super + Wheel down` | Next workspace (wheel) |
+| `Super + Wheel up` | Previous workspace (wheel) |
+
+#### Style
+
+| Key | Action |
+|-----|--------|
+| `Super + Ctrl + T` | Pick a theme |
+| `Super + Ctrl + W` | Pick a wallpaper |
+| `Super + Home` | Previous wallpaper |
+| `Super + End` | Next wallpaper |
+
+#### Toggles
+
+| Key | Action |
+|-----|--------|
+| `Super + Ctrl + O` | Toggles menu |
+| `Super + Ctrl + N` | Night light on/off |
+| `Super + Ctrl + I` | Stay awake on/off |
+| `Super + Ctrl + Backspace` | Gaps on/off |
+| `Super + Ctrl + A` | Single-window aspect ratio on/off |
+
+#### Assistant
+
+| Key | Action |
+|-----|--------|
+| `Super (tap)` | Voice mode on/off (tap Super) |
+| `Super + Shift + V` | New conversation |
+| `Super + M` | Swap model |
+| `Super + A` | Conversation panel |
+
+Two binds moved: wallpaper cycling is now **Super + Home / End** (bare
+Home/End were swallowed from every app), and **Super + X** opens the menu's
+Power page instead of wlogout (`wlogout` is still installed).
+
+## The system menu
+
+**Super + Alt + Space**, or click the Ubuntu logo at the left of the bar. Esc goes back a level; type to
+search the current page. Pages bind to keys directly: **Super + Ctrl + C**
+capture, **+ O** toggles, **+ T** themes, **+ W** wallpapers, **Super + X**
+power.
+
+| Page | What's there |
+|------|--------------|
+| Capture | Region/screen/window to clipboard or file, annotate, OCR, QR, colour, recordings with desktop or mic audio |
+| Toggles | Night light, stay awake, do not disturb, screensaver, workspace layout, no gaps, single-window aspect, no animations, solid windows, sharp corners, monitor scale |
+| Style | Theme picker (previews), wallpaper picker (thumbnails), next/previous theme, fetch omarchy's themes |
+| Tools | Emoji, clipboard history, reminders ("25m Tea"), calculator, web apps, btop |
+| Setup | Audio, Bluetooth, network, Wi-Fi as a QR code, power profile, wireless display, edit `local.lua` / menu additions, reload |
+| Update | apt, Flatpak, this repo (`git pull` + `--configs-only`), omarchy's themes |
+| Power | Lock, suspend, hibernate (when available), log out, restart, shut down |
+
+The menu is data: `~/.config/desktop-menu/menu.json`. Add your own items in
+`~/.config/desktop-menu/local.json` (never overwritten) -- a menu id there adds
+to that page, a new id makes a new page:
+
+```json
+{ "tools": { "items": [ { "icon": "󰊢", "label": "Lazygit", "exec": "launch-tui lazygit" } ] } }
+```
+
+## Quick settings
+
+**Super + N** or the bell. The notification centre now opens with a toggle
+grid (Wi-Fi, Bluetooth, microphone, night light, stay awake, do not disturb;
+screenshot, record, theme, next wallpaper, lock, power), a volume slider with
+per-app levels, a brightness slider on laptops, the media player while
+something plays, and then every notification as its own card (grouping is off,
+so nothing hides behind a collapsed stack).
+
+## Themes
+
+`desktop-theme` recolours the whole desktop at once: waybar, swaync, rofi,
+kitty, Hyprland's borders, hyprlock, swayosd, btop, wlogout, gtklock and the
+GTK theme/icons (Yaru accents; Dracula keeps its own).
+
+```bash
+desktop-theme list            # * marks the current one
+desktop-theme set tokyo-night # or Super + Ctrl + T for the picker
+desktop-theme sync            # fetch/update omarchy's ~23 themes (~280 MB, mostly wallpapers)
+```
+
+A theme is an [omarchy](https://github.com/basecamp/omarchy/tree/master/themes)
+theme directory: `colors.toml` (+ optional `backgrounds/` and `icons.theme`).
+Your own go in `~/.config/desktop-theme/themes/<name>/`. Themes with
+wallpapers put the first one up when chosen, and **Super + Home / End** then
+cycles that theme's wallpapers.
+
+Every themed file is rendered from a template in `configs/theme/templates/`
+whose first lines name its destination (`{{! dest: ~/.config/kitty/theme.conf }}`).
+Placeholders are the colour names (`{{ accent }}`, `{{ background_strip }}`,
+`{{ red_rgb }}`, `{{ mix background foreground 0.2 }}`, ...). To theme another
+app, drop a template in `~/.config/desktop-theme/templates/` -- no code change.
+
+## Toggles, idle and lock
+
+- **Hyprland toggles** (`hypr-toggle <name>`, or the Toggles page): no gaps,
+  single-window aspect ratio (a lone window stays 16:9 instead of stretching
+  across a 32:9 panel), no animations, solid windows, sharp corners. Each is a
+  Lua snippet in `configs/hypr/toggles/`; switching one on copies it into
+  `~/.local/state/hypr/toggles/`, so it survives reloads, logins and redeploys.
+- **Workspace layout** (**Super + Alt + L**): this workspace switches between
+  dwindle and *scrolling* -- an endless strip of half-screen columns, made for
+  the ultrawide. **Super + Alt + = / -** sizes the column.
+- **Monitor scale** (**Super + /**, **Super + Alt + /**): steps the focused
+  monitor through 1 / 1.25 / 1.33 / 1.5 / 1.6 / 2 / 2.5 / 3; persists per monitor
+  until *Monitor scale reset*.
+- **Night light** (**Super + Ctrl + N**), **stay awake** (**Super + Ctrl + I**):
+  show on the bar only while on; click the icon to turn off.
+- **Idle**: hypridle shows the screensaver at 55 minutes, locks at 60 and turns
+  the screens off at 61. Video playing (players and browsers ask for it) and
+  *stay awake* pause it. Replace `~/.config/screensaver/banner.txt` with your own
+  art; switch the screensaver off from the Toggles page.
+
+## Laptops
+
+- Low battery: a notification at 20% and a critical one at 10%.
+- Power profiles follow the power source: the profile you last used on AC comes
+  back when you plug in (balanced at first), the battery one when you unplug
+  (power-saver at first). Pick one from the bar, quick settings or Setup.
+- Clamshell: closing the lid with an external monitor connected switches the
+  internal panel off; opening it brings it back.
+- A brightness slider appears in quick settings when the machine has a backlight.
 
 ## Waybar
 
 The status bar shows (left to right):
 
-- **Left**: Workspace icons (10 persistent), taskbar
+- **Left**: menu, voice assistant, workspace icons (10 persistent), taskbar
 - **Center**: Active window title
-- **Right**: System tray, network (with live bandwidth), bluetooth, disk, memory, CPU, temperature, audio, backlight, battery, date, time, media player, notifications
+- **Right**: recording pill, caps-sudo, tray, night light / stay awake / updates
+  (only when relevant), network (with live bandwidth), bluetooth, disk, memory,
+  CPU, temperature, audio, microphone, backlight, battery, power profile,
+  weather, date (hover: month calendar), time, media player, notifications
 
 **Click actions:**
-- Network icon -> network settings; right-click -> nm-connection-editor
-- Bluetooth icon -> bluetooth settings; right-click -> toggle rfkill
-- Notification icon -> toggle notification center
+- Menu icon -> system menu; right-click -> keybindings
+- Network -> network settings; right-click -> nm-connection-editor
+- Bluetooth -> bluetooth settings; right-click -> toggle rfkill
+- Audio -> pavucontrol; right-click -> mute. Microphone -> mute; scroll -> level
+- Power profile -> cycle; weather -> full forecast; updates -> Update page
+- Recording pill -> stop recording
+- Notification icon -> quick settings; right-click -> do not disturb
+
+Weather comes from wttr.in, which guesses the place from your IP. Pin one with
+`WEATHER_LOCATION=Vancouver` in `~/.config/desktop/env`.
 
 ## Structure
 
@@ -233,17 +397,20 @@ The status bar shows (left to right):
 │   ├── WIRELESS-DISPLAY.md        # Miracast: the protocol and the 3 gotchas
 │   └── CAPS-SUDO.md               # CapsLock passwordless-sudo toggle, and its sharp edges
 ├── configs/
-│   ├── theme/dracula.css          # THE palette — every stylesheet imports this
-│   ├── hypr/hyprland.lua          # Compositor (loads env-local, polkit-local, local)
-│   ├── hypr/hyprland.conf         # Same, for Hyprland < 0.55 (hyprlang)
+│   ├── theme/templates/*.tpl      # Every themed file: palette.css, kitty, rofi, hypr, btop, ...
+│   ├── hypr/hyprland.lua          # Compositor (loads env-local, polkit-local, theme, state, local)
+│   ├── hypr/hyprland.conf         # Old hyprlang config, rollback only (not updated)
+│   ├── hypr/toggles/*.lua         # Optional looks, switched with hypr-toggle
+│   ├── hypr/{hypridle,hyprlock}.conf
+│   ├── desktop-menu/menu.json     # The system menu's tree
+│   ├── screensaver/banner.txt     # Seeded once; replace with your own art
 │   ├── waybar/{config.jsonc,style.css}
 │   ├── kitty/kitty.conf
 │   ├── rofi/{config.rasi,spotlight-dark.rasi}
 │   ├── mako/config
 │   ├── swaync/{config.json,style.css}
 │   ├── wlogout/{layout,style.css}
-│   ├── gtklock/style.css
-│   └── gtk-{3.0,4.0}/settings.ini
+│   └── gtklock/style.css
 ├── llm-serve/                     # Opt-in: Qwen3.8-27B on one 24GB GPU (llama.cpp + MTP)
 │   ├── install.sh                 # CUDA build (all present GPU archs), model download, unit
 │   ├── qwen38.service             # Measured flags; why 192K ctx, q4 KV, draft-n-max 2
@@ -259,7 +426,23 @@ The status bar shows (left to right):
 │   ├── vm/win10-lg.xml            # libvirt domain
 │   ├── bin/{lg-start,lg-stop,8bitdo-passthrough,dump-vbios.sh}
 │   └── assets/                    # vBIOS lives here, gitignored
+├── themes/dracula/colors.toml     # The default theme, in omarchy's format
 └── scripts/                       # Installed to ~/.local/bin
+    ├── desktop-menu             # The system menu (rofi, data from menu.json + local.json)
+    ├── desktop-theme            # Theme engine: list/set/next/sync, renders the templates
+    ├── quick-settings           # Backend for the swaync toggle buttons
+    ├── capture / screenrecord   # Screenshots, OCR, QR, colour; recording + bar pill
+    ├── nightlight / stay-awake  # hyprsunset; systemd idle inhibitor
+    ├── hypr-toggle              # Optional looks (gaps, aspect, animations, ...)
+    ├── workspace-layout         # dwindle <-> scrolling, per workspace
+    ├── monitor-scale            # Super + / scale stepping
+    ├── window-pop               # Float + pin + centre, and back
+    ├── screensaver(-run)        # hypridle's screensaver
+    ├── power-monitor            # Battery warnings, power profile per power source
+    ├── lid-switch               # Clamshell mode
+    ├── wallpaper-set            # Set + remember the wallpaper
+    ├── bar-status               # Waybar: date + calendar, weather, updates
+    ├── emoji-picker, reminder, webapp-install, wifi-qr, launch-tui
     ├── lock-screen
     ├── wireless-display
     ├── keyboard-fire            # Razer per-key RGB flame effect (openrazer)
@@ -272,21 +455,20 @@ The status bar shows (left to right):
     └── open-bluetooth-settings
 ```
 
-## Theming
+## Theming conventions
 
-Every GTK-CSS surface -- waybar, swaync, wlogout, gtklock -- imports the same
-palette from `configs/theme/dracula.css`, which defines the Dracula colours once
-as `@define-color` names plus a few documented translucent derivatives.
+Every GTK-CSS surface -- waybar, swaync, wlogout, gtklock -- imports a
+`palette.css` that `desktop-theme` renders next to it (GTK CSS has no `~`
+expansion or import path). Stylesheets use role names -- `@accent`, `@bg`,
+`@fg`, `@muted`, `@surface`, `@on-accent` -- plus the hues (`@red`, `@cyan`,
+...); the old Dracula names (`@purple`, `@comment`, `@current`) remain as
+aliases.
 
-GTK CSS has no `~` expansion and no import search path, so `setup.sh` copies the
-palette next to each stylesheet as `palette.css`. To retheme the entire desktop,
-edit that one file and re-run `./setup.sh --configs-only`.
-
-Two conventions keep it coherent:
+Two conventions keep it coherent on every theme:
 
 - **Accents carry meaning.** A module is coloured by its domain (connectivity
-  cyan, compute purple, power green, brightness yellow), and only shifts to
-  orange/red when it wants attention.
+  cyan, compute accent, power green, brightness yellow), softened towards the
+  text colour, and only shifts to orange/red when it wants attention.
 - **One radius, one gap.** Every pill is `10px` with a `5px` vertical margin, so
   bar height stays uniform regardless of which modules are enabled.
 
@@ -322,9 +504,12 @@ Two details worth knowing, both learned the hard way:
 
 ## Customization
 
-- **Colours**: edit `configs/theme/dracula.css`, then `./setup.sh --configs-only`
-- **Wallpaper**: replace `~/Pictures/Wallpapers/current.jpg`, or cycle the Donut
-  variants with `Home`/`End`
+- **Colours**: `desktop-theme set <name>`, or your own theme in
+  `~/.config/desktop-theme/themes/<name>/colors.toml`
+- **Wallpaper**: Super + Ctrl + W picks one; Super + Home / End cycles. Add
+  images to `~/Pictures/Wallpapers` (used when the theme ships none)
+- **Menu**: `~/.config/desktop-menu/local.json` (never overwritten)
+- **Machine-local Hyprland**: `~/.config/hypr/local.lua` (never overwritten)
 - **GPU config**: `~/.config/hypr/env-local.conf` (never overwritten by redeploys)
 - **Keybinds**: `~/.config/hypr/hyprland.lua`, then `hyprctl reload`
 - **Waybar modules**: `~/.config/waybar/config.jsonc`, then `pkill -SIGUSR2 waybar`
@@ -332,6 +517,9 @@ Two details worth knowing, both learned the hard way:
 ## Credits
 
 - [Hyprland](https://hyprland.org/) -- Wayland compositor
+- [omarchy](https://github.com/basecamp/omarchy) (MIT) -- the model for the menu,
+  quick settings, toggles, capture tools, screensaver and theme format; its
+  themes are fetched as-is by `desktop-theme sync`
 - [Dracula Theme](https://draculatheme.com/) -- GTK theme & icons
 - [JetBrains Mono](https://www.jetbrains.com/lp/mono/) -- Typeface
 - [Nerd Fonts](https://www.nerdfonts.com/) -- Patched fonts with icons

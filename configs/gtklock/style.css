@@ -1,6 +1,6 @@
 @import "palette.css";
 
-/* gtklock — lock screen. Colours from the shared Dracula palette. */
+/* gtklock — lock screen. Colours from the theme palette. */
 window {
     background-size: cover;
     background-position: center;
@@ -16,7 +16,7 @@ window {
 
 #date-label {
     font-size: 28px;
-    color: @purple;
+    color: @accent;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
     margin-bottom: 48px;
 }
@@ -24,7 +24,7 @@ window {
 #input-field {
     background-color: alpha(@bg, 0.8);
     color: @fg;
-    border: 2px solid @purple;
+    border: 2px solid @accent;
     border-radius: 12px;
     font-size: 18px;
     padding: 12px 24px;

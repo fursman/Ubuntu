@@ -1,0 +1,26 @@
+#!/bin/bash
+# Put an image up as the wallpaper and remember it for the next login.
+#   wallpaper-set <image> [transition]
+#
+# The choice is a symlink, ~/.local/state/desktop-theme/wallpaper, which the
+# Hyprland autostart shows at login. awww decodes jpg/png/gif/webp itself.
+
+img="$1"
+[ -f "$img" ] || { echo "wallpaper-set: no such image: $img" >&2; exit 1; }
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -z "$WAYLAND_DISPLAY" ]; then
+    WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR" 2>/dev/null | grep -xE 'wayland-[0-9]+' | head -1)
+    export WAYLAND_DISPLAY
+fi
+
+transitions=(center outer left right top bottom wipe grow)
+t="${2:-${transitions[$RANDOM % ${#transitions[@]}]}}"
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/desktop-theme"
+mkdir -p "$state"
+ln -sfn "$(realpath "$img")" "$state/wallpaper"
+
+AWWW="$HOME/.local/bin/awww"
+command -v awww >/dev/null && AWWW=awww
+"$AWWW" img --transition-type "$t" --transition-step 2 --transition-fps 60 "$img"

@@ -1,0 +1,43 @@
+#!/bin/bash
+# JSON for the bar's small custom modules.
+#   bar-status date | weather | updates
+#
+# date: glibc `date`, not waybar's clock -- libstdc++'s tzdb misparses
+# America/Vancouver in 2026 (see the waybar config) -- with a month calendar,
+# today highlighted, as the tooltip.
+
+esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+json() { python3 -I -c 'import json,sys; print(json.dumps(dict(zip(sys.argv[1::2], sys.argv[2::2]))))' "$@"; }
+
+case "$1" in
+    date)
+        today=$(date +%-d)
+        cal=$(ncal -bM 2>/dev/null || cal -m 2>/dev/null)
+        # Strip the terminal highlight cal adds, then mark today in pango.
+        cal=$(sed -e 's/_\x08//g' <<<"$cal" | esc | sed -E "3,\$s/(^|[^0-9])($today)([^0-9]|\$)/\1<span background='#ffffff33'><b>\2<\/b><\/span>\3/")
+        json text "$(date '+󰃭 %e %b %Y')" tooltip "<tt>$(date '+%A %e %B %Y')
+
+$cal</tt>"
+        ;;
+    weather)
+        # wttr.in guesses the place from your IP; set WEATHER_LOCATION in
+        # ~/.config/desktop/env to pin one (e.g. Vancouver).
+        [ -f ~/.config/desktop/env ] && . ~/.config/desktop/env
+        loc=${WEATHER_LOCATION:-}
+        line=$(curl -fsS --max-time 6 "https://wttr.in/${loc// /+}?format=%c%t|%C,+feels+%f,+wind+%w,+humidity+%h|%l" 2>/dev/null)
+        [ -n "$line" ] && [[ $line != *"Unknown"* ]] || { echo '{"text":""}'; exit 0; }
+        IFS='|' read -r now detail place <<<"$line"
+        json text "$(tr -s ' ' <<<"$now" | sed 's/+//')" tooltip "$place: $detail (click for the forecast)"
+        ;;
+    updates)
+        n=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
+        if [ "${n:-0}" -gt 0 ]; then
+            sec=$(apt list --upgradable 2>/dev/null | grep -c -- '-security')
+            class=updates; [ "$sec" -gt 0 ] && class=security
+            json text "󰚰 $n" tooltip "$n package updates ($sec security) — click to update" class "$class"
+        else
+            echo '{"text":""}'
+        fi
+        ;;
+    *) echo "usage: bar-status date|weather|updates" >&2; exit 1 ;;
+esac

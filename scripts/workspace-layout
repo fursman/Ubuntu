@@ -1,0 +1,26 @@
+#!/bin/bash
+# Per-workspace tiling layout: dwindle (the default) or scrolling.
+#   workspace-layout toggle | dwindle | scrolling | current
+#
+# Scrolling lays windows out as columns on an endless strip, which suits the
+# 32:9 panel: each new window gets a half-width column and the strip scrolls.
+# The choice is written to ~/.local/state/hypr/layouts/<id>.lua, which
+# hyprland.lua loads on every reload, and applied at once with `hyprctl eval`.
+
+DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hypr/layouts"
+read -r ws layout < <(hyprctl activeworkspace -j | jq -r '"\(.id) \(.tiledLayout // "dwindle")"')
+# Special and named workspaces report ids <= 0; leave them alone.
+[[ $ws =~ ^[0-9]+$ ]] && (( ws > 0 )) || exit 1
+
+case "${1:-toggle}" in
+    current)   echo "$layout"; exit 0 ;;
+    toggle)    [ "$layout" = scrolling ] && new=dwindle || new=scrolling ;;
+    dwindle|scrolling) new="$1" ;;
+    *) echo "usage: workspace-layout toggle|dwindle|scrolling|current" >&2; exit 1 ;;
+esac
+
+rule="hl.workspace_rule({ workspace = \"$ws\", layout = \"$new\" })"
+hyprctl eval "$rule" >/dev/null || { notify-send -u critical "Workspace layout" "Hyprland refused: $rule"; exit 1; }
+mkdir -p "$DIR"
+if [ "$new" = dwindle ]; then rm -f "$DIR/$ws.lua"; else echo "$rule" > "$DIR/$ws.lua"; fi
+notify-send -a workspace-layout -u low -t 2000 -i view-grid "Workspace $ws" "Layout: $new"

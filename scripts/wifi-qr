@@ -1,0 +1,28 @@
+#!/bin/bash
+# Show the current Wi-Fi network as a QR code, so a phone can join by
+# pointing its camera at the screen. Needs the password stored in
+# NetworkManager (nmcli may ask polkit for it).
+
+# The active wireless *connection* (its name can differ from the SSID).
+con=$(nmcli -t -g NAME,TYPE connection show --active 2>/dev/null |
+      awk -F: '$NF == "802-11-wireless" { sub(/:[^:]*$/, ""); gsub(/\\:/, ":"); print; exit }')
+[ -n "$con" ] || { notify-send -a wifi-qr "Not on Wi-Fi" "Connect to a wireless network first"; exit 1; }
+ssid=$(nmcli -g 802-11-wireless.ssid connection show "$con" 2>/dev/null)
+pass=$(nmcli -s -g 802-11-wireless-security.psk connection show "$con" 2>/dev/null)
+keymgmt=$(nmcli -g 802-11-wireless-security.key-mgmt connection show "$con" 2>/dev/null)
+ssid=${ssid//\\:/:}; pass=${pass//\\:/:}
+
+if [ -z "$keymgmt" ]; then
+    sec=nopass
+elif [ -z "$pass" ]; then
+    notify-send -a wifi-qr -u normal "No saved password" "NetworkManager has no stored password for $ssid"
+    exit 1
+else
+    sec=WPA
+fi
+
+# MECARD-style escaping: backslash first, then ; , : "
+esc() { local s=${1//\\/\\\\}; s=${s//;/\;}; s=${s//,/\\,}; s=${s//:/\\:}; s=${s//\"/\\\"}; printf '%s' "$s"; }
+payload="WIFI:T:$sec;S:$(esc "$ssid");P:$(esc "$pass");;"
+exec kitty --class floating-tui --title "Wi-Fi: $ssid" -o font_size=11 \
+    bash -c 'qrencode -t ansiutf8 -m 2 "$1"; printf "\n  %s\n\n  Press any key to close" "$2"; read -rsn1' _ "$payload" "$ssid"

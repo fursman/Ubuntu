@@ -1,0 +1,59 @@
+#!/bin/bash
+# Laptop power watcher, started at login; exits at once without a battery.
+#
+#  - Warns once at 20% and again (critical, stays up) at 10% while discharging.
+#  - Remembers a power profile per power source: plug in and you get back the
+#    profile you last used on AC (balanced at first), unplug and you get the
+#    battery one (power-saver at first). Change the profile from the bar or the
+#    menu and that choice is what comes back next time.
+#
+# Polls sysfs every 20 s: cheaper than it sounds and immune to upower quirks.
+
+shopt -s nullglob
+bats=(/sys/class/power_supply/BAT*)
+[ ${#bats[@]} -gt 0 ] || exit 0
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/power-monitor.lock"
+flock -n 9 || exit 0                       # one per session
+
+BAT=${bats[0]}
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/desktop"
+mkdir -p "$STATE"
+
+on_ac() {
+    local s
+    for s in /sys/class/power_supply/*/online; do
+        [ "$(cat "$(dirname "$s")/type" 2>/dev/null)" = Mains ] && [ "$(cat "$s")" = 1 ] && return 0
+    done
+    return 1
+}
+profile_get() { powerprofilesctl get 2>/dev/null; }
+profile_set() { command -v powerprofilesctl >/dev/null && powerprofilesctl set "$1" 2>/dev/null; }
+
+last_source=""
+warned=100
+while sleep 20 || true; do
+    on_ac && src=ac || src=battery
+    if [ "$src" != "$last_source" ]; then
+        if [ -n "$last_source" ] && command -v powerprofilesctl >/dev/null; then
+            profile_get > "$STATE/profile-$last_source"
+            want=$(cat "$STATE/profile-$src" 2>/dev/null)
+            [ -n "$want" ] || { [ "$src" = ac ] && want=balanced || want=power-saver; }
+            profile_set "$want"
+            notify-send -a power -u low -t 3000 -i battery "On ${src/ac/AC power}" "Power profile: $want"
+        fi
+        last_source=$src
+        warned=100
+    fi
+
+    cap=$(cat "$BAT/capacity" 2>/dev/null) || continue
+    status=$(cat "$BAT/status" 2>/dev/null)
+    if [ "$status" = Discharging ]; then
+        if (( cap <= 10 && warned > 10 )); then
+            notify-send -a power -u critical -i battery-caution "Battery critically low" "$cap% left — plug in now"
+            warned=10
+        elif (( cap <= 20 && warned > 20 )); then
+            notify-send -a power -u normal -i battery-low "Battery low" "$cap% left"
+            warned=20
+        fi
+    fi
+done

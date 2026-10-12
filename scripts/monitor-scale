@@ -1,0 +1,48 @@
+#!/bin/bash
+# Step the focused monitor's scale: monitor-scale up | down | reset
+#
+# Everything on this desktop is sized for scale 1, so this is for the moment
+# you want bigger (a presentation, a far-away TV) rather than a new default.
+# The choice persists per monitor in ~/.local/state/hypr/monitors/<name>.lua
+# until `reset`.
+
+STEPS=(1 1.25 1.333333 1.5 1.6 2 2.5 3)
+DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hypr/monitors"
+# Mode, position and rotation are carried over unchanged, so scaling one
+# screen of a multi-monitor desk does not move or un-rotate it.
+read -r name cur mode pos transform < <(hyprctl monitors -j | jq -r '.[] | select(.focused) |
+    "\(.name) \(.scale) \(.width)x\(.height)@\(.refreshRate) \(.x)x\(.y) \(.transform)"')
+[ -n "$name" ] || exit 1
+
+idx=0
+for i in "${!STEPS[@]}"; do
+    awk -v a="$cur" -v b="${STEPS[$i]}" 'BEGIN{exit !(a+0 >= b-0.01)}' && idx=$i
+done
+
+# Hyprland swaps a scale that does not divide the mode evenly for the nearest
+# one that does, so accept whatever it lands on as long as it moved the right
+# way, and persist that actual value.
+apply() {   # apply <scale> <up|down|reset>
+    local rule got
+    rule="hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", transform = $transform, scale = $1 })"
+    hyprctl eval "$rule" >/dev/null || return 1
+    sleep 0.3
+    got=$(hyprctl monitors -j | jq -r ".[] | select(.name == \"$name\") | .scale")
+    case $2 in
+        up)   awk -v a="$got" -v b="$cur" 'BEGIN{exit !(a > b + 0.01)}' || return 1 ;;
+        down) awk -v a="$got" -v b="$cur" 'BEGIN{exit !(a < b - 0.01)}' || return 1 ;;
+    esac
+    mkdir -p "$DIR"
+    if awk -v a="$got" 'BEGIN{exit !((a-1)^2 < 0.0001)}'; then
+        rm -f "$DIR/$name.lua"
+    else
+        echo "hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", transform = $transform, scale = $got })" > "$DIR/$name.lua"
+    fi
+    notify-send -a monitor-scale -u low -t 2000 -i video-display "$name" "Scale $(printf '%.2f' "$got")"
+}
+
+case "${1:-up}" in
+    reset) apply 1 reset; exit ;;
+    up)   for ((i = idx + 1; i < ${#STEPS[@]}; i++)); do apply "${STEPS[$i]}" up && exit 0; done ;;
+    down) for ((i = idx - 1; i >= 0; i--)); do apply "${STEPS[$i]}" down && exit 0; done ;;
+esac

@@ -1,0 +1,26 @@
+#!/bin/bash
+# A reminder notification after a delay: reminder <when> <message...>
+#   reminder 25m Tea's ready        reminder 1h30m Stand up
+# Also accepts one string, as the menu passes it: reminder "10m call mum".
+# A transient systemd timer, so it fires even if this shell is gone.
+# reminder --list shows pending ones.
+if [ "$1" = --list ]; then
+    now=$(date +%s)
+    systemctl --user list-timers 'reminder-*' --no-legend -o json 2>/dev/null |
+        jq -r '.[] | "\(.next) \(.activates)"' |
+        while read -r next svc; do
+            msg=$(systemctl --user show -p Description --value "$svc")
+            printf '%s  (%s, in %d min)\n' "$msg" "$(date -d "@$((next / 1000000))" +%H:%M)" $(( (next / 1000000 - now + 59) / 60 ))
+        done | grep . || echo "None"
+    exit 0
+fi
+if [ $# -eq 1 ]; then
+    when=${1%% *}; rest=${1#"$when"}; rest=${rest# }
+else
+    when=$1; shift; rest="$*"
+fi
+msg="${rest:-Reminder}"
+[[ $when =~ ^[0-9]+[smhd]?([0-9]+[smh])*$ ]] || { notify-send -a reminder "Reminder not set" "Start with a time like 10m or 1h30m"; exit 1; }
+systemd-run --user --quiet --collect --unit="reminder-$(date +%s%N)" --on-active="$when" \
+    --description="$msg" notify-send -a reminder -u critical -i alarm-symbolic "Reminder" "$msg"
+notify-send -a reminder -u low -t 2500 -i alarm-symbolic "Reminder set" "In $when: $msg"

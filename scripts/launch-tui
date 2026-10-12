@@ -1,0 +1,5 @@
+#!/bin/bash
+# Open a terminal program in its own floating window (btop, nmtui, ...).
+#   launch-tui <command> [args...]
+# The window class is floating-tui, which hyprland.lua floats and sizes.
+exec kitty --class floating-tui --title "$1" -e "$@"

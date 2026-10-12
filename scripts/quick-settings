@@ -1,0 +1,41 @@
+#!/bin/bash
+# Backend for the quick-settings toggles in the swaync panel.
+#   quick-settings <wifi|bluetooth|mic|nightlight|stay-awake|dnd> state
+#   quick-settings <...> set          (reads SWAYNC_TOGGLE_STATE=true|false)
+#
+# swaync runs button commands as a plain argument list, not through a shell,
+# so each button calls  sh -c '~/.local/bin/quick-settings <name> <action>'
+# and all the logic lives here.
+
+name=$1; action=$2
+B="$HOME/.local/bin"
+want=${SWAYNC_TOGGLE_STATE:-true}
+
+state() {
+    case $name in
+        wifi)       [ "$(nmcli radio wifi 2>/dev/null)" = enabled ] ;;
+        bluetooth)  bluetoothctl show 2>/dev/null | grep -q "Powered: yes" ;;
+        mic)        ! wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | grep -q MUTED ;;
+        nightlight) [ "$("$B/nightlight" status | jq -r .class)" = on ] ;;
+        stay-awake) [ "$("$B/stay-awake" status | jq -r .class)" = on ] ;;
+        dnd)        [ "$(swaync-client -D -sw)" = true ] ;;
+        *) return 1 ;;
+    esac
+}
+
+set_state() {   # $1 = on|off
+    case $name in
+        wifi)       nmcli radio wifi "$1" ;;
+        bluetooth)  if [ "$1" = on ]; then rfkill unblock bluetooth; bluetoothctl power on; else bluetoothctl power off; fi ;;
+        mic)        wpctl set-mute @DEFAULT_AUDIO_SOURCE@ "$([ "$1" = on ] && echo 0 || echo 1)" ;;
+        nightlight) "$B/nightlight" "$1" ;;
+        stay-awake) "$B/stay-awake" "$1" ;;
+        dnd)        if [ "$1" = on ]; then swaync-client -dn -sw; else swaync-client -df -sw; fi ;;
+    esac >/dev/null 2>&1
+}
+
+case $action in
+    state) state && echo true || echo false ;;
+    set)   if [ "$want" = true ]; then set_state on; else set_state off; fi ;;
+    *) echo "usage: quick-settings <name> state|set" >&2; exit 1 ;;
+esac

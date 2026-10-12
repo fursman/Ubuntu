@@ -1,0 +1,38 @@
+#!/bin/bash
+# Switch an optional Hyprland look on or off, persistently.
+#   hypr-toggle <name> [on|off|toggle]    (default: toggle)
+#   hypr-toggle --list                     name<TAB>on|off<TAB>description
+#
+# Each toggle is a Lua snippet in ~/.config/hypr/toggles/<name>.lua (shipped by
+# setup.sh). Switching one on copies it to ~/.local/state/hypr/toggles/, which
+# hyprland.lua loads on every reload; off deletes the copy. State, not config,
+# so it survives logins and config redeploys.
+
+SRC="$HOME/.config/hypr/toggles"
+DST="${XDG_STATE_HOME:-$HOME/.local/state}/hypr/toggles"
+
+if [ "$1" = "--list" ]; then
+    for f in "$SRC"/*.lua; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f" .lua)
+        state=off; [ -f "$DST/$name.lua" ] && state=on
+        desc=$(sed -n '1s/^-- *//p' "$f")
+        printf '%s\t%s\t%s\n' "$name" "$state" "$desc"
+    done
+    exit 0
+fi
+
+name="$1"; action="${2:-toggle}"
+[ -f "$SRC/$name.lua" ] || { echo "hypr-toggle: no toggle named '$name'" >&2; exit 1; }
+if [ "$action" = toggle ]; then
+    if [ -f "$DST/$name.lua" ]; then action=off; else action=on; fi
+fi
+case "$action" in
+    on)  mkdir -p "$DST" && cp "$SRC/$name.lua" "$DST/$name.lua" ;;
+    off) rm -f "$DST/$name.lua" ;;
+    *)   echo "usage: hypr-toggle <name> [on|off|toggle]" >&2; exit 1 ;;
+esac
+hyprctl reload >/dev/null
+title=$(sed -n '1s/^-- *\([^:]*\):.*/\1/p' "$SRC/$name.lua")
+notify-send -a hypr-toggle -u low -t 2000 -i preferences-system "${title:-$name}" "$action"
+echo "$action"

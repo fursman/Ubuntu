@@ -1,0 +1,41 @@
+#!/bin/bash
+# Night light: a warm screen for the evening, via hyprsunset.
+#   nightlight toggle | on [kelvin] | off | restore | status
+#
+# The state (on/off and temperature) is kept in ~/.local/state/desktop/
+# nightlight so it comes back after a login (autostart runs `restore`). status
+# prints JSON for the bar, which this script refreshes with signal 9.
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/desktop/nightlight"
+DEFAULT_K=4000
+mkdir -p "$(dirname "$STATE")"
+read -r mode kelvin < "$STATE" 2>/dev/null
+mode=${mode:-off}; kelvin=${kelvin:-$DEFAULT_K}
+
+apply() {
+    command -v hyprsunset >/dev/null || { notify-send -u normal "Night light unavailable" "Install hyprsunset"; exit 1; }
+    pgrep -x hyprsunset >/dev/null || { setsid -f hyprsunset >/dev/null 2>&1; sleep 1; }
+    if [ "$1" = on ]; then
+        hyprctl hyprsunset temperature "$kelvin" >/dev/null
+    else
+        hyprctl hyprsunset identity >/dev/null
+    fi
+}
+save() { echo "$1 $kelvin" > "$STATE"; pkill -RTMIN+9 -x waybar 2>/dev/null; }
+
+case "${1:-toggle}" in
+    status)
+        if [ "$mode" = on ]; then
+            printf '{"text":"󰖔","tooltip":"Night light on (%sK) — click to turn off","class":"on"}\n' "$kelvin"
+        else
+            printf '{"text":"󰖨","tooltip":"Night light off — click to turn on","class":"off"}\n'
+        fi
+        exit 0 ;;
+    restore) [ "$mode" = on ] && apply on; exit 0 ;;
+    on)      [ -n "$2" ] && kelvin=$2; apply on; save on ;;
+    off)     apply off; save off ;;
+    toggle)  if [ "$mode" = on ]; then apply off; save off; else apply on; save on; fi ;;
+    *) echo "usage: nightlight toggle|on [kelvin]|off|restore|status" >&2; exit 1 ;;
+esac
+read -r mode _ < "$STATE"
+notify-send -a nightlight -u low -t 2000 -i weather-clear-night "Night light" "$mode"
