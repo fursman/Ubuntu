@@ -265,6 +265,7 @@ The status bar shows (left to right):
     ├── keyboard-ambient         # Calm warm-white backlight + red CapsLock key while caps-sudo is armed
     ├── hypr-cheatsheet
     ├── restart-waybar
+    ├── waybar-launch            # Login autostart: retries an early waybar exit, logs to ~/.local/state/waybar/
     ├── wallpaper-cycle
     ├── open-network-settings
     └── open-bluetooth-settings

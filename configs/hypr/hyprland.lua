@@ -166,7 +166,7 @@ hl.animation({ leaf = "layers",           enabled = true, speed = 4,  bezier = "
 
 ----------------------------------------------------------------- AUTOSTART --
 hl.on("hyprland.start", function()
-    hl.exec_cmd("waybar")
+    hl.exec_cmd("~/.local/bin/waybar-launch")
     hl.exec_cmd("~/.local/bin/awww-daemon")
     hl.exec_cmd("sleep 3 && ~/.local/bin/awww img --transition-type center --transition-step 2 --transition-fps 60 ~/Pictures/Wallpapers/current.jpg")
     hl.exec_cmd("swayosd-server")

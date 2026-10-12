@@ -1,0 +1,37 @@
+#!/bin/bash
+# Start waybar at login, and start it again if it dies while starting up.
+#
+# On pile (2026-10-11) waybar, the first thing Hyprland autostarts, exited at
+# login while every other autostart survived. Started by hand later, with the
+# same environment, it ran fine. The exit left no trace, so this retries a few
+# times and keeps each attempt's output.
+#
+# Only an early exit is retried. Once waybar has been up for UP_SECS, an exit
+# is deliberate (restart-waybar, pkill) or a real crash, and the launcher steps
+# aside rather than fight whoever stopped it.
+
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/waybar"
+LOG="$LOG_DIR/launch.log"
+TRIES=5
+UP_SECS=30
+
+mkdir -p "$LOG_DIR"
+: > "$LOG"    # one login's worth
+
+for try in $(seq 1 $TRIES); do
+    # restart-waybar or a manual start got there first
+    if pgrep -x waybar >/dev/null; then
+        echo "$(date '+%F %T') waybar already running, not starting another" >> "$LOG"
+        exit 0
+    fi
+    echo "$(date '+%F %T') attempt $try" >> "$LOG"
+    start=$SECONDS
+    waybar >> "$LOG" 2>&1
+    status=$?
+    up=$((SECONDS - start))
+    echo "$(date '+%F %T') waybar exited with status $status after ${up}s" >> "$LOG"
+    [ "$up" -ge "$UP_SECS" ] && exit 0
+    sleep "$try"
+done
+echo "$(date '+%F %T') giving up after $TRIES attempts" >> "$LOG"
+exit 1
