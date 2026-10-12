@@ -1,37 +1,63 @@
 #!/bin/bash
-# Start waybar at login, and start it again if it dies while starting up.
+# Start waybar at login, and start it again whenever it crashes.
 #
-# On pile (2026-10-11) waybar, the first thing Hyprland autostarts, exited at
-# login while every other autostart survived. Started by hand later, with the
-# same environment, it ran fine. The exit left no trace, so this retries a few
-# times and keeps each attempt's output.
+# waybar 0.15.0 aborts if a power_supply node disappears while the battery
+# module is adding it: the inotify_add_watch failure is thrown from a worker
+# thread and nothing catches it (Waybar issue #5256, fixed upstream after
+# 0.15.0). pile's Bluetooth Magic Trackpad reconnects every ~30 s in bursts,
+# adding and removing hid-<mac>-battery each time, so the bar vanished at
+# random -- sometimes within a minute of login, which is all the first
+# version of this script, retrying only early exits, could catch.
 #
-# Only an early exit is retried. Once waybar has been up for UP_SECS, an exit
-# is deliberate (restart-waybar, pkill) or a real crash, and the launcher steps
-# aside rather than fight whoever stopped it.
+# A deliberate stop is left alone: a clean exit, or SIGTERM/SIGINT/SIGKILL
+# from restart-waybar or pkill. Any other exit is a crash and waybar is
+# started again, unless it is crashing in a loop or Hyprland has gone.
+# Each exit is also sent to the journal (journalctl -t waybar-launch), which
+# outlives the per-login log.
 
 LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/waybar"
 LOG="$LOG_DIR/launch.log"
-TRIES=5
-UP_SECS=30
+MAX_CRASHES=5    # this many crashes inside WINDOW seconds means give up
+WINDOW=60
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"    # one login's worth
 
-for try in $(seq 1 $TRIES); do
-    # restart-waybar or a manual start got there first
-    if pgrep -x waybar >/dev/null; then
-        echo "$(date '+%F %T') waybar already running, not starting another" >> "$LOG"
-        exit 0
-    fi
-    echo "$(date '+%F %T') attempt $try" >> "$LOG"
-    start=$SECONDS
+note() {
+    echo "$(date '+%F %T') $*" >> "$LOG"
+    logger -t waybar-launch -- "$*"
+}
+
+# restart-waybar or a manual start got there first
+if pgrep -x waybar >/dev/null; then
+    note "waybar already running, not starting another"
+    exit 0
+fi
+
+crashes=()
+while :; do
+    note "starting waybar"
     waybar >> "$LOG" 2>&1
     status=$?
-    up=$((SECONDS - start))
-    echo "$(date '+%F %T') waybar exited with status $status after ${up}s" >> "$LOG"
-    [ "$up" -ge "$UP_SECS" ] && exit 0
-    sleep "$try"
+    case $status in
+        0|130|137|143)
+            note "waybar stopped (status $status), not restarting"
+            exit 0 ;;
+    esac
+    note "waybar crashed (status $status)"
+    if ! pgrep -x Hyprland >/dev/null; then
+        note "Hyprland has gone, not restarting"
+        exit 0
+    fi
+    now=$SECONDS
+    recent=()
+    for t in "${crashes[@]}"; do
+        (( now - t < WINDOW )) && recent+=("$t")
+    done
+    crashes=("${recent[@]}" "$now")
+    if (( ${#crashes[@]} >= MAX_CRASHES )); then
+        note "giving up: $MAX_CRASHES crashes within ${WINDOW}s"
+        exit 1
+    fi
+    sleep "${#crashes[@]}"
 done
-echo "$(date '+%F %T') giving up after $TRIES attempts" >> "$LOG"
-exit 1

@@ -16,9 +16,24 @@ if [ -n "$LATEST_SIG" ]; then
     export HYPRLAND_INSTANCE_SIGNATURE="$LATEST_SIG"
 fi
 
-pkill -TERM waybar 2>/dev/null
+# With no waybar left to copy from, the environ above is Hyprland's own, which
+# never holds WAYLAND_DISPLAY (Hyprland sets it after it starts). Find the
+# compositor's socket instead, or the new bar dies with "cannot open display".
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -z "$WAYLAND_DISPLAY" ]; then
+    # Exactly wayland-N: awww-daemon puts wayland-1-awww-daemon.sock alongside.
+    SOCK=$(ls -t "$XDG_RUNTIME_DIR" 2>/dev/null | grep -xE 'wayland-[0-9]+' | head -1)
+    [ -n "$SOCK" ] && export WAYLAND_DISPLAY="$SOCK"
+fi
+
+# -x: an unanchored "waybar" pattern also matches this script's own name, and
+# killed it before it could start the new bar.
+pkill -TERM -x waybar-launch 2>/dev/null
+pkill -TERM -x waybar 2>/dev/null
 sleep 0.5
-pkill -9 waybar 2>/dev/null
+pkill -9 -x waybar 2>/dev/null
 sleep 0.3
-nohup waybar &>/dev/null &
-echo "Waybar restarted (pid $!)"
+# Through the launcher, so the new bar is restarted if it crashes too.
+setsid -f "$HOME/.local/bin/waybar-launch" >/dev/null 2>&1 < /dev/null
+sleep 0.5
+echo "Waybar restarted (pid $(pgrep -x waybar))"
