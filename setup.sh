@@ -580,6 +580,23 @@ for script in "$SCRIPT_DIR"/scripts/*; do
     info "-> ~/.local/bin/$(basename "$script")"
 done
 
+# Hyprland, unlike GNOME, is not started through a login shell, so ~/.profile
+# never runs and ~/.local/bin is missing from PATH: a terminal answers
+# "command not found" for claude and for every script above. ~/.bashrc puts it
+# back, appended once; the case guard keeps PATH from growing in nested shells.
+if ! grep -qF '*":$HOME/.local/bin:"*)' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" <<'BASHRCEOF'
+
+# Hyprland, unlike GNOME, is not started through a login shell, so ~/.profile
+# never runs and ~/.local/bin (claude, desktop-theme, ...) is missing from PATH.
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+BASHRCEOF
+    info "-> ~/.bashrc puts ~/.local/bin on PATH"
+fi
+
 # -- Theme ------------------------------------------------------------------
 # Themes are omarchy-format directories (colors.toml + optional backgrounds/).
 # This repo ships dracula; `desktop-theme sync` (or the menu) adds omarchy's

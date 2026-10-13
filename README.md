@@ -104,9 +104,11 @@ the missing work, so re-running is fast and quiet.
 7. **GTK/icon theme** -- Dracula (other themes use Ubuntu's own Yaru accents)
 8. **Config files** -- dotfiles, Hyprland toggles, the menu, and a
    machine-local `env-local.conf` holding GPU-specific environment
-9. **Helper scripts + session wiring** -- `~/.local/bin` scripts, then the
-   theme is rendered into every app (`desktop-theme reapply`), polkit agent
-   selection, masking `mako` so it cannot fight swaync for the notification bus
+9. **Helper scripts + session wiring** -- `~/.local/bin` scripts (and a
+   `~/.bashrc` line putting that directory on PATH, which Hyprland, never
+   reading `~/.profile`, leaves off), then the theme is rendered into every app
+   (`desktop-theme reapply`), polkit agent selection, masking `mako` so it
+   cannot fight swaync for the notification bus
 10. **Wallpaper daemon, assets, tuning** -- builds `awww`, pulls wallpapers and
     wlogout icons, fetches omarchy's themes, applies sysctl and NVMe scheduler
     tuning
