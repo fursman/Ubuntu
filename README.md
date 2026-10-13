@@ -124,6 +124,7 @@ description, so the help cannot drift from the keys. The tables below come from
 the same place (`hypr-cheatsheet --markdown`). Also: `3-finger swipe` switches
 workspaces, and the media/volume/brightness keys drive SwayOSD.
 
+
 #### Help
 
 | Key | Action |
@@ -156,6 +157,7 @@ workspaces, and the media/volume/brightness keys drive SwayOSD.
 | `Super + N` | Notifications & quick settings |
 | `Super + Shift + N` | Do not disturb on/off |
 | `Super + L` | Lock screen |
+| `Super + Ctrl + L` | Screensaver now |
 | `Super + X` | Power menu |
 
 #### Capture

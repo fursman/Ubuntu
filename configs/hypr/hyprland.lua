@@ -363,6 +363,7 @@ bind(mainMod .. " + period",     "Emoji picker",             "~/.local/bin/emoji
 bind(mainMod .. " + N",          "Notifications & quick settings", "swaync-client -t -sw")
 bind(mainMod .. " + SHIFT + N",  "Do not disturb on/off",    "swaync-client -d -sw")
 bind(mainMod .. " + L",          "Lock screen",              "~/.local/bin/lock-screen")
+bind(mainMod .. " + CTRL + L",   "Screensaver now",          "~/.local/bin/screensaver start")
 bind(mainMod .. " + X",          "Power menu",               "~/.local/bin/desktop-menu system")
 
 group("Style")
