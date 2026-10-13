@@ -35,7 +35,7 @@ Three scripts live here, deliberately separate:
 | Launcher | **Rofi** -- Spotlight-style app launcher |
 | File Manager | **Thunar** -- lightweight file manager |
 | Lock Screen | **hyprlock** -- themed, blurred lock (gtklock where hyprlock is unavailable) |
-| Idle | **hypridle** -- screensaver at 55 min, lock at 60, screen off at 61, lock before sleep |
+| Idle | **hypridle** -- screensaver at 5 min, lock at 60, screen off at 61, lock before sleep |
 | Screensaver | **terminaltexteffects** -- animated banner in a fullscreen terminal |
 | Night light | **hyprsunset** -- warm screen on a key or a click |
 | Clipboard | **cliphist** -- clipboard history (text + images) via Rofi |
@@ -72,7 +72,7 @@ chmod +x setup.sh
 Log out, select **Hyprland** from your display manager, and log back in.
 
 Press **Super + Space** for a searchable keybind cheatsheet, **Super + Alt +
-Space** (or the Ubuntu logo at the left of the bar) for the system menu, and
+Space** for the system menu, and
 **Super + N** for quick settings.
 
 Useful flags:
@@ -272,7 +272,7 @@ Power page instead of wlogout (`wlogout` is still installed).
 
 ## The system menu
 
-**Super + Alt + Space**, or click the Ubuntu logo at the left of the bar. Esc goes back a level; type to
+**Super + Alt + Space**. Esc goes back a level; type to
 search the current page. Pages bind to keys directly: **Super + Ctrl + C**
 capture, **+ O** toggles, **+ T** themes, **+ W** wallpapers, **Super + X**
 power.
@@ -343,7 +343,7 @@ app, drop a template in `~/.config/desktop-theme/templates/` -- no code change.
   until *Monitor scale reset*.
 - **Night light** (**Super + Ctrl + N**), **stay awake** (**Super + Ctrl + I**):
   show on the bar only while on; click the icon to turn off.
-- **Idle**: hypridle shows the screensaver at 55 minutes, locks at 60 and turns
+- **Idle**: hypridle shows the screensaver after 5 minutes, locks at 60 and turns
   the screens off at 61. Video playing (players and browsers ask for it) and
   *stay awake* pause it. Replace `~/.config/screensaver/banner.txt` with your own
   art; switch the screensaver off from the Toggles page.
@@ -362,7 +362,7 @@ app, drop a template in `~/.config/desktop-theme/templates/` -- no code change.
 
 The status bar shows (left to right):
 
-- **Left**: menu, voice assistant, workspace icons (10 persistent), taskbar
+- **Left**: voice assistant, workspace icons (10 persistent), taskbar
 - **Center**: Active window title
 - **Right**: recording pill, caps-sudo, tray, night light / stay awake / updates
   (only when relevant), network (with live bandwidth), bluetooth, disk, memory,
@@ -370,7 +370,6 @@ The status bar shows (left to right):
   weather, date (hover: month calendar), time, media player, notifications
 
 **Click actions:**
-- Menu icon -> system menu; right-click -> keybindings
 - Network -> network settings; right-click -> nm-connection-editor
 - Bluetooth -> bluetooth settings; right-click -> toggle rfkill
 - Audio -> pavucontrol; right-click -> mute. Microphone -> mute; scroll -> level

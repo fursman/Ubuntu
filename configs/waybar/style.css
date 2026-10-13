@@ -49,15 +49,6 @@ tooltip label {
 #taskbar button.active { border-bottom: 3px solid @accent; }
 #taskbar button:hover { background: @surface-hover; }
 
-/* -- Launcher (opens the system menu) ------------------------------------ */
-#custom-menu {
-    color: @accent;
-    font-family: "JetBrainsMono Nerd Font";
-    font-size: 26px;
-    padding: 0 18px 0 16px;
-}
-#custom-menu:hover { color: @fg-bright; }
-
 /* -- Workspaces ---------------------------------------------------------- */
 #workspaces button {
     padding-left: 15px;

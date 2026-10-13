@@ -2,18 +2,11 @@
     "layer": "top",
     "position": "top",
     "height": 30,
-    "modules-left": ["custom/menu", "custom/voice", "hyprland/workspaces", "wlr/taskbar"],
+    "modules-left": ["custom/voice", "hyprland/workspaces", "wlr/taskbar"],
     "modules-center": ["hyprland/window"],
     // Indicators (recording, night light, stay awake, updates) are empty --
     // invisible -- until switched on, so the bar only grows when it has news.
     "modules-right": ["custom/recording", "custom/caps-sudo", "tray", "custom/nightlight", "custom/stay-awake", "custom/updates", "network", "bluetooth", "disk", "memory", "cpu", "temperature", "pulseaudio", "pulseaudio#mic", "backlight", "battery", "power-profiles-daemon", "custom/weather", "custom/date", "custom/time", "custom/media", "custom/notification"],
-
-    "custom/menu": {
-        "format": "",
-        "tooltip-format": "Menu (Super + Alt + Space) — right-click: keybindings",
-        "on-click": "~/.local/bin/desktop-menu",
-        "on-click-right": "~/.local/bin/hypr-cheatsheet"
-    },
 
     "custom/recording": {
         "exec": "~/.local/bin/screenrecord status",

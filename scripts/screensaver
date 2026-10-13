@@ -1,6 +1,6 @@
 #!/bin/bash
-# Terminal-art screensaver (terminaltexteffects), shown by hypridle a few
-# minutes before the lock. Any key or mouse movement ends it.
+# Terminal-art screensaver (terminaltexteffects), shown by hypridle after 5
+# idle minutes (the lock follows at 60). Any key or mouse movement ends it.
 #   screensaver start | stop | toggle | status
 #
 # The art is ~/.config/screensaver/banner.txt -- replace it with your own.
