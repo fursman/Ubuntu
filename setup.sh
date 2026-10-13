@@ -430,7 +430,7 @@ step "8/10 - Configuration files"
 declare -A CONFIG_MAP=(
     ["configs/hypr/hyprland.conf"]="$HOME/.config/hypr/hyprland.conf"
     ["configs/hypr/hyprland.lua"]="$HOME/.config/hypr/hyprland.lua"
-    ["configs/waybar/config.jsonc"]="$HOME/.config/waybar/config.jsonc"
+    ["configs/waybar/config.jsonc"]="$HOME/.config/waybar/base.jsonc"
     ["configs/waybar/style.css"]="$HOME/.config/waybar/style.css"
     ["configs/kitty/kitty.conf"]="$HOME/.config/kitty/kitty.conf"
     ["configs/rofi/config.rasi"]="$HOME/.config/rofi/config.rasi"
@@ -453,6 +453,29 @@ for src in "${!CONFIG_MAP[@]}"; do
     cp "$SCRIPT_DIR/$src" "$dest"
     info "-> $dest"
 done
+
+# waybar reads config.jsonc, which here is a machine-local stub that includes
+# base.jsonc (the file above). waybar gives the including file precedence and
+# merges module by module, so a machine can override one option of one module
+# (a narrow laptop panel dropping the SSID and IP from the network module) and
+# still take every other change a redeploy brings. Created once, never
+# rewritten. A config.jsonc that does not mention base.jsonc is the old
+# full copy that this stub replaced; it was always identical to the repo's.
+WAYBAR_LOCAL="$HOME/.config/waybar/config.jsonc"
+if [ -f "$WAYBAR_LOCAL" ] && grep -q 'waybar/base.jsonc' "$WAYBAR_LOCAL"; then
+    info "-> ~/.config/waybar/config.jsonc (kept, not overwritten)"
+else
+    cat > "$WAYBAR_LOCAL" <<WBEOF
+{
+    // Machine-local waybar overrides. setup.sh created this once and will not
+    // touch it again; base.jsonc is the one it keeps current. Anything set
+    // here wins over base.jsonc, one option at a time, e.g.
+    //   "network": { "format-wifi": "\udb81\udda9 {bandwidthDownBytes}" }
+    "include": ["$HOME/.config/waybar/base.jsonc"]
+}
+WBEOF
+    info "-> ~/.config/waybar/config.jsonc (created)"
+fi
 
 # Hyprland toggles (hypr-toggle copies one into ~/.local/state to switch it on).
 mkdir -p "$HOME/.config/hypr/toggles"

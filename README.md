@@ -405,7 +405,7 @@ Weather comes from wttr.in, which guesses the place from your IP. Pin one with
 │   ├── hypr/{hypridle,hyprlock}.conf
 │   ├── desktop-menu/menu.json     # The system menu's tree
 │   ├── screensaver/banner.txt     # Seeded once; replace with your own art
-│   ├── waybar/{config.jsonc,style.css}
+│   ├── waybar/{config.jsonc,style.css}   # Deployed as base.jsonc; config.jsonc is the local override stub
 │   ├── kitty/kitty.conf
 │   ├── rofi/{config.rasi,spotlight-dark.rasi}
 │   ├── mako/config
@@ -513,7 +513,9 @@ Two details worth knowing, both learned the hard way:
 - **Machine-local Hyprland**: `~/.config/hypr/local.lua` (never overwritten)
 - **GPU config**: `~/.config/hypr/env-local.conf` (never overwritten by redeploys)
 - **Keybinds**: `~/.config/hypr/hyprland.lua`, then `hyprctl reload`
-- **Waybar modules**: `~/.config/waybar/config.jsonc`, then `pkill -SIGUSR2 waybar`
+- **Waybar modules**: `~/.config/waybar/base.jsonc` is the deployed config; put
+  machine-local overrides in `~/.config/waybar/config.jsonc` (never overwritten,
+  wins option by option), then `pkill -SIGUSR2 waybar`
 
 ## Credits
 
