@@ -2,7 +2,7 @@
     "layer": "top",
     "position": "top",
     "height": 30,
-    "modules-left": ["custom/voice", "hyprland/workspaces", "wlr/taskbar"],
+    "modules-left": ["custom/voice", "ext/workspaces", "wlr/taskbar"],
     "modules-center": ["hyprland/window"],
     // Indicators (recording, night light, stay awake, updates) are empty --
     // invisible -- until switched on, so the bar only grows when it has news.
@@ -119,8 +119,13 @@
         "on-click-right": "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)"
     },
 
-    "hyprland/workspaces": {
+    // ext/workspaces, not hyprland/workspaces: waybar 0.15's Hyprland module
+    // switches with the old `dispatch workspace N`, which a Lua config rejects,
+    // so clicks did nothing. This one switches over the Wayland workspace
+    // protocol. Workspaces 1-10 are kept alive by hyprland.lua.
+    "ext/workspaces": {
         "on-click": "activate",
+        "all-outputs": true,
         "format": "{icon}",
         "format-icons": {
             "1": "󰆍 ",
@@ -133,9 +138,6 @@
             "8": "󰊴 ",
             "9": "☂ ",
             "10": "⚑ "
-        },
-        "persistent-workspaces": {
-            "*": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         }
     },
 

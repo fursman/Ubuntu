@@ -307,6 +307,13 @@ for _, ns in ipairs({ "swaync-control-center", "swaync-notification-window" }) d
 end
 hl.layer_rule({ name = "blur-rofi", match = { namespace = "rofi" }, blur = true, ignore_alpha = 0.5 })
 
+---------------------------------------------------------------- WORKSPACES --
+-- 1-10 always exist, so the bar shows all ten and any of them can be clicked
+-- (waybar's ext/workspaces module only lists workspaces that exist).
+for i = 1, 10 do
+    hl.workspace_rule({ workspace = tostring(i), persistent = true })
+end
+
 ------------------------------------------------- SPECIAL WORKSPACES --------
 hl.workspace_rule({ workspace = "special:scratchpad", on_created_empty = "kitty --class scratchpad" })
 hl.workspace_rule({ workspace = "special:music",      on_created_empty = "kitty --class scratchpad -e playerctl metadata --follow" })

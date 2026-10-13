@@ -370,6 +370,8 @@ The status bar shows (left to right):
   weather, date (hover: month calendar), time, media player, notifications
 
 **Click actions:**
+- Workspace icon -> go to that workspace; taskbar icon -> focus that window
+  (middle-click closes it)
 - Network -> network settings; right-click -> nm-connection-editor
 - Bluetooth -> bluetooth settings; right-click -> toggle rfkill
 - Audio -> pavucontrol; right-click -> mute. Microphone -> mute; scroll -> level
