@@ -1,4 +1,4 @@
-[{
+{
     "layer": "top",
     "position": "top",
     "height": 30,
@@ -267,4 +267,4 @@
         "format-critical": "󰸁 {temperatureC}°C",
         "tooltip": true
     }
-}]
+}

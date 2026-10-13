@@ -461,6 +461,9 @@ done
 # still take every other change a redeploy brings. Created once, never
 # rewritten. A config.jsonc that does not mention base.jsonc is the old
 # full copy that this stub replaced; it was always identical to the repo's.
+# base.jsonc must stay a single object, not the one-bar `[{ ... }]` array it
+# used to be: waybar cannot merge an array into the including object and
+# then draws an empty bar.
 WAYBAR_LOCAL="$HOME/.config/waybar/config.jsonc"
 if [ -f "$WAYBAR_LOCAL" ] && grep -q 'waybar/base.jsonc' "$WAYBAR_LOCAL"; then
     info "-> ~/.config/waybar/config.jsonc (kept, not overwritten)"
