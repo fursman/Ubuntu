@@ -25,6 +25,10 @@ if [ "$1" != "--relock" ] && command -v hyprlock >/dev/null; then
             hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = $2 })" >/dev/null 2>&1 \
                 || hyprctl dispatch movecursor "$1" "$2" >/dev/null 2>&1
         fi
+        # A machine can keep its own lock screen in hyprlock-local.conf;
+        # setup.sh never writes that file, only hyprlock.conf.
+        local_conf="$HOME/.config/hypr/hyprlock-local.conf"
+        [ -f "$local_conf" ] && exec hyprlock -c "$local_conf"
         exec hyprlock
     }
     exit 0

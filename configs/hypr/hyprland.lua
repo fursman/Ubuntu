@@ -214,8 +214,9 @@ local WALLPAPER = [[img=~/.local/state/desktop-theme/wallpaper; [ -e "$img" ] ||
 
 -- Idle: hypridle when installed (~/.config/hypr/hypridle.conf: screensaver,
 -- lock, screen off), swayidle as the fallback. Both honour idle inhibitors:
--- the stay-awake toggle and any fullscreen window.
-local IDLE = [[command -v hypridle >/dev/null && exec hypridle; exec swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" resume "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" before-sleep '~/.local/bin/lock-screen']]
+-- the stay-awake toggle and any fullscreen window. A machine's own timers go
+-- in hypridle-local.conf, which setup.sh never writes.
+local IDLE = [[f=~/.config/hypr/hypridle-local.conf; command -v hypridle >/dev/null && { [ -f "$f" ] && exec hypridle -c "$f"; exec hypridle; }; exec swayidle -w timeout 3600 '~/.local/bin/lock-screen' timeout 3660 "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" resume "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" before-sleep '~/.local/bin/lock-screen']]
 
 hl.on("hyprland.start", function()
     hl.exec_cmd("~/.local/bin/waybar-launch")

@@ -453,6 +453,12 @@ for src in "${!CONFIG_MAP[@]}"; do
     cp "$SCRIPT_DIR/$src" "$dest"
     info "-> $dest"
 done
+# A machine that wants its own lock screen or idle timers keeps them in
+# hyprlock-local.conf / hypridle-local.conf: lock-screen and hyprland.lua
+# use those instead when present, and this script never writes them.
+for f in hyprlock-local.conf hypridle-local.conf; do
+    [ -f "$HOME/.config/hypr/$f" ] && info "-> ~/.config/hypr/$f (machine-local, kept; used instead)"
+done
 
 # waybar reads config.jsonc, which here is a machine-local stub that includes
 # base.jsonc (the file above). waybar gives the including file precedence and

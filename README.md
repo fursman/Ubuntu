@@ -521,6 +521,9 @@ Two details worth knowing, both learned the hard way:
 - **Menu**: `~/.config/desktop-menu/local.json` (never overwritten)
 - **Machine-local Hyprland**: `~/.config/hypr/local.lua` (never overwritten)
 - **GPU config**: `~/.config/hypr/env-local.conf` (never overwritten by redeploys)
+- **Lock screen / idle timers**: copy `hyprlock.conf` or `hypridle.conf` to
+  `hyprlock-local.conf` / `hypridle-local.conf` in `~/.config/hypr` and edit
+  that; when present it is used instead, and redeploys never touch it
 - **Keybinds**: `~/.config/hypr/hyprland.lua`, then `hyprctl reload`
 - **Waybar modules**: `~/.config/waybar/base.jsonc` is the deployed config; put
   machine-local overrides in `~/.config/waybar/config.jsonc` (never overwritten,
