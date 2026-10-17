@@ -12,7 +12,21 @@
 pgrep -x screensaver-run >/dev/null && pkill -x screensaver-run
 
 if [ "$1" != "--relock" ] && command -v hyprlock >/dev/null; then
-    pidof hyprlock >/dev/null || exec hyprlock
+    # hyprlock's hide_cursor leaves the pointer drawn where it was; park it
+    # in the focused monitor's bottom-right corner, out of the way. Lua
+    # configs dispatch Lua (0.55+), hyprlang ones take movecursor; if neither
+    # works the lock still goes ahead.
+    pidof hyprlock >/dev/null || {
+        corner=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused)
+            | (if .transform % 2 == 1 then [.height, .width] else [.width, .height] end) as [$w, $h]
+            | "\(.x + ($w / .scale | floor) - 1) \(.y + ($h / .scale | floor) - 1)"' 2>/dev/null)
+        if [ -n "$corner" ]; then
+            set -- $corner
+            hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = $2 })" >/dev/null 2>&1 \
+                || hyprctl dispatch movecursor "$1" "$2" >/dev/null 2>&1
+        fi
+        exec hyprlock
+    }
     exit 0
 fi
 
