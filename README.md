@@ -351,7 +351,9 @@ app, drop a template in `~/.config/desktop-theme/templates/` -- no code change.
 - **Idle**: hypridle shows the screensaver after 5 minutes, locks at 60 and turns
   the screens off at 61. Video playing (players and browsers ask for it) and
   *stay awake* pause it. Replace `~/.config/screensaver/banner.txt` with your own
-  art; switch the screensaver off from the Toggles page.
+  art; switch the screensaver off from the Toggles page. Or let Claude draw a
+  new one every week (needs Claude Code, signed in; past banners are kept in
+  `history/`): `systemctl --user enable --now screensaver-refresh.timer`.
 
 ## Laptops
 
@@ -410,6 +412,7 @@ Weather comes from wttr.in, which guesses the place from your IP. Pin one with
 │   ├── hypr/{hypridle,hyprlock}.conf
 │   ├── desktop-menu/menu.json     # The system menu's tree
 │   ├── screensaver/banner.txt     # Seeded once; replace with your own art
+│   ├── screensaver/screensaver-refresh.{service,timer}  # Opt-in weekly Claude banner (installed, off)
 │   ├── waybar/{config.jsonc,style.css}   # Deployed as base.jsonc; config.jsonc is the local override stub
 │   ├── kitty/kitty.conf
 │   ├── rofi/{config.rasi,spotlight-dark.rasi}
@@ -444,6 +447,7 @@ Weather comes from wttr.in, which guesses the place from your IP. Pin one with
     ├── monitor-scale            # Super + / scale stepping
     ├── window-pop               # Float + pin + centre, and back
     ├── screensaver(-run)        # hypridle's screensaver
+    ├── screensaver-refresh      # Asks Claude for a new banner (screensaver-refresh.timer)
     ├── power-monitor            # Battery warnings, power profile per power source
     ├── lid-switch               # Clamshell mode
     ├── wallpaper-set            # Set + remember the wallpaper

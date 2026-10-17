@@ -1,0 +1,6 @@
+[Unit]
+Description=Ask Claude for a new screensaver banner
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/screensaver-refresh

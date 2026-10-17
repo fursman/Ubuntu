@@ -665,6 +665,21 @@ elif [ -f "$VOICE_UNIT" ] && [ ! -x "$HOME/.local/bin/voice-assistant" ]; then
     info "voice-assistant not installed — skipping its unit (waybar's voice module stays idle)"
 fi
 
+# A new screensaver banner every week, drawn by Claude (screensaver-refresh).
+# Opt-in: the units are installed but the timer is never enabled here, since
+# it spends Claude usage and needs Claude Code signed in. Left as it is when
+# already enabled.
+mkdir -p "$HOME/.config/systemd/user"
+for u in screensaver-refresh.service screensaver-refresh.timer; do
+    install -m 0644 "$SCRIPT_DIR/configs/screensaver/$u" "$HOME/.config/systemd/user/$u"
+done
+systemctl --user daemon-reload 2>/dev/null || true
+if systemctl --user is-enabled --quiet screensaver-refresh.timer 2>/dev/null; then
+    info "-> screensaver-refresh.timer (enabled: a new banner every week)"
+elif [ -x "$HOME/.local/bin/claude" ] || command -v claude >/dev/null; then
+    info "Weekly Claude-drawn screensaver banner, off: systemctl --user enable --now screensaver-refresh.timer"
+fi
+
 # AppArmor parser concurrency cap. apparmor_parser defaults to -j nproc, and the
 # 5.0.x parser shipped with 26.04 corrupts its heap above ~12 parallel jobs: the
 # workers SIGABRT and the parent then blocks forever on dead children, at 0% CPU.

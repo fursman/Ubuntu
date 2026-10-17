@@ -1,0 +1,64 @@
+#!/bin/bash
+# Ask Claude for a new screensaver banner (~/.config/screensaver/banner.txt).
+# Run weekly by screensaver-refresh.timer, which setup.sh installs but leaves
+# off: `systemctl --user enable --now screensaver-refresh.timer` opts in (it
+# needs Claude Code, signed in). Past banners stay in history/. A result that
+# is empty or too big for the screen is thrown away.
+set -u
+DIR="$HOME/.config/screensaver"
+mkdir -p "$DIR/history"
+cd "$DIR" || exit 1
+PREV=$(mktemp) || exit 1
+trap 'rm -f "$PREV"' EXIT
+cp banner.txt "$PREV" 2>/dev/null || rm -f "$PREV"
+
+CLAUDE="$HOME/.local/bin/claude"
+[ -x "$CLAUDE" ] || CLAUDE=$(command -v claude) || {
+    echo "screensaver-refresh: claude is not installed" >&2; exit 1; }
+
+read -r -d '' PROMPT <<'P'
+You keep the screensaver banner on the user's desktop machine (Ubuntu, Hyprland). Replace ~/.config/screensaver/banner.txt with a new one in your own style: a little creative, a little surprising, never generic. terminaltexteffects animates it, centred, white on black, in a fullscreen terminal.
+
+Ingredients, if you like: what is going on with this machine and its owner.@EXTRA@ Past banners are in ~/.config/screensaver/history/ -- do not repeat an idea or a layout from there.
+
+Rules: plain UTF-8 text, no ANSI escapes, no tabs. At most 110 columns and 22 lines. Monospace art: block and box characters are fine, but no emoji or wide characters. Nothing private (no IPs, addresses, passwords). Write banner.txt, then write the same text to ~/.config/screensaver/history/$(date +%F)-<two-or-three-word-slug>.txt. Reply with one line saying what you made.
+P
+PROMPT="${PROMPT//\$(date +%F)/$(date +%F)}"
+
+# More to draw on where it exists: the voice assistant's code, and Claude's
+# notes from working in it (Claude Code names a project's directory after its
+# path, every non-alphanumeric character a dash).
+TOOLS=("Read(~/.config/screensaver/**)" "Write(~/.config/screensaver/**)"
+       "Edit(~/.config/screensaver/**)" Glob Grep)
+EXTRA=""
+VA="$HOME/voice-assistant"
+if [ -d "$VA" ]; then
+    EXTRA+=" Their voice assistant lives in ~/voice-assistant (README.md and the code; git log is not available to you)."
+    TOOLS+=("Read(~/voice-assistant/**)")
+    MEM="$HOME/.claude/projects/$(printf '%s' "$VA" | sed 's/[^A-Za-z0-9]/-/g')/memory"
+    if [ -d "$MEM" ]; then
+        EXTRA+=" Your notes about them are in ${MEM/#$HOME/\~}/."
+        TOOLS+=("Read(${MEM/#$HOME/\~}/**)")
+    fi
+fi
+PROMPT="${PROMPT//@EXTRA@/$EXTRA}"
+
+# A clean environment, so this run is not mistaken for a nested session.
+env $(env | sed -n 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/-u \1/p') \
+    "$CLAUDE" -p "$PROMPT" --allowedTools "${TOOLS[@]}"
+
+ok=$(python3 -I - "$DIR/banner.txt" <<'PY'
+import sys, unicodedata
+try:
+    lines = open(sys.argv[1], encoding="utf-8").read().rstrip("\n").split("\n")
+except Exception:
+    print(0); sys.exit()
+wide = any(unicodedata.east_asian_width(c) in "WF" for l in lines for c in l)
+bad = len(lines) > 22 or max(map(len, lines)) > 110 or "\x1b" in "".join(lines) or wide
+print(0 if bad or not "".join(lines).strip() else 1)
+PY
+)
+if [ "$ok" != 1 ] && [ -f "$PREV" ]; then
+    echo "screensaver-refresh: new banner rejected, keeping the old one" >&2
+    cp "$PREV" banner.txt
+fi
