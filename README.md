@@ -171,7 +171,7 @@ workspaces, and the media/volume/brightness keys drive SwayOSD.
 | `Super + F12` | Screen → ~/Pictures |
 | `Super + Shift + S` | Region → clipboard |
 | `Super + Shift + F12` | Region → ~/Pictures |
-| `Super + Shift + A` | Region → annotate (swappy) |
+| `Super + Shift + E` | Region → annotate (swappy) |
 | `Super + Shift + T` | Copy text from screen (OCR) |
 | `Super + Shift + Q` | Read a QR code from screen |
 | `Super + Shift + C` | Pick a colour |
@@ -266,8 +266,9 @@ workspaces, and the media/volume/brightness keys drive SwayOSD.
 | Key | Action |
 |-----|--------|
 | `Super (tap)` | Voice mode on/off (tap Super) |
-| `Super + Shift + V` | New conversation |
+| `Super + Shift + A` | New conversation |
 | `Super + M` | Swap model |
+| `Super + Ctrl + V` | Only my voice on/off |
 | `Super + A` | Conversation panel |
 
 Two binds moved: wallpaper cycling is now **Super + Home / End** (bare

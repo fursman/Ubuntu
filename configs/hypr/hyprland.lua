@@ -353,8 +353,9 @@ group("Assistant")
 -- SUPER tapped alone toggles it, hence release. Inert on a machine with no
 -- assistant installed.
 bind("SUPER + SUPER_L",           "Voice mode on/off (tap Super)", "kill -USR1 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)", { release = true })
-bind(mainMod .. " + SHIFT + V",   "New conversation",              "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)")
+bind(mainMod .. " + SHIFT + A",   "New conversation",              "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)")
 bind(mainMod .. " + M",           "Swap model",                    "~/.local/bin/assistant --swap")
+bind(mainMod .. " + CTRL + V",    "Only my voice on/off",          "~/.local/bin/assistant --voice-only toggle")
 bind(mainMod .. " + A",           "Conversation panel",            "~/.local/bin/assistant-panel-toggle")
 
 group("Tools")
@@ -386,7 +387,7 @@ bind(mainMod .. " + F12",        "Screen → ~/Pictures",      "~/.local/bin/cap
 bind(mainMod .. " + SHIFT + S",  "Region → clipboard",       "~/.local/bin/capture region-clip")
 bind(mainMod .. " + SHIFT + F12", "Region → ~/Pictures",     "~/.local/bin/capture region-file")
 -- Annotate before saving: swappy opens the grab for arrows/text/blur.
-bind(mainMod .. " + SHIFT + A",  "Region → annotate (swappy)", "~/.local/bin/capture region-edit")
+bind(mainMod .. " + SHIFT + E",  "Region → annotate (swappy)", "~/.local/bin/capture region-edit")
 bind(mainMod .. " + SHIFT + T",  "Copy text from screen (OCR)", "~/.local/bin/capture text")
 bind(mainMod .. " + SHIFT + Q",  "Read a QR code from screen", "~/.local/bin/capture qr")
 bind(mainMod .. " + SHIFT + C",  "Pick a colour",            "~/.local/bin/capture color")
