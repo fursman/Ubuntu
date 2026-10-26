@@ -129,6 +129,7 @@
     "title": "Update",
     "items": [
       { "icon": "󰚰", "label": "Update Ubuntu (apt)", "exec": "launch-tui bash -c 'sudo apt update && sudo apt full-upgrade; echo; read -rsn1 -p \"Done — press a key\"'" },
+      { "icon": "󰋩", "label": "Update Craft apps (PhotoCraft, FilmCraft…)", "exec": "launch-tui bash -c 'craft-update; echo; read -rsn1 -p \"Done — press a key\"'", "when": "craft-update count >/dev/null 2>&1 && dpkg-query -W -f='${Maintainer}' photocraft 2>/dev/null | grep -q storyteller" },
       { "icon": "󰏖", "label": "Update Flatpaks", "exec": "launch-tui bash -c 'flatpak update; echo; read -rsn1 -p \"Done — press a key\"'", "when": "command -v flatpak" },
       { "icon": "󰊢", "label": "Update this desktop (git pull + redeploy)", "exec": "launch-tui bash -c 'cd ~/Ubuntu && git pull --ff-only && ./setup.sh --configs-only; echo; read -rsn1 -p \"Done — press a key\"'", "when": "[ -d ~/Ubuntu/.git ]" },
       { "icon": "󰏘", "label": "Update omarchy's themes", "exec": "desktop-theme sync && notify-send -a desktop-theme 'Themes updated'" }

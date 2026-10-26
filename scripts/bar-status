@@ -31,10 +31,16 @@ $cal</tt>"
         ;;
     updates)
         n=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
-        if [ "${n:-0}" -gt 0 ]; then
+        # The Craft apps come from GitHub releases, not a repository, so apt
+        # cannot count them; craft-update can (cached, one GitHub call an hour).
+        craft=$(command -v craft-update >/dev/null && craft-update count 2>/dev/null || echo 0)
+        craft=${craft:-0}
+        if [ "$((n + craft))" -gt 0 ]; then
             sec=$(apt list --upgradable 2>/dev/null | grep -c -- '-security')
             class=updates; [ "$sec" -gt 0 ] && class=security
-            json text "󰚰 $n" tooltip "$n package updates ($sec security) — click to update" class "$class"
+            tip="$n package updates ($sec security)"
+            [ "$craft" -gt 0 ] && tip="$tip, $craft Craft app updates"
+            json text "󰚰 $((n + craft))" tooltip "$tip — click to update" class "$class"
         else
             echo '{"text":""}'
         fi

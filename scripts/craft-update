@@ -1,0 +1,102 @@
+#!/bin/bash
+# craft-update -- keep the storytold Craft apps (PhotoCraft, FilmCraft,
+# VectorCraft, ...) current. They ship as .deb files attached to GitHub
+# releases with no apt repository behind them, so apt never sees a new version
+# and `apt list --upgradable` stays quiet while the installed copy ages. This
+# asks GitHub for the latest release of every installed Craft package, fetches
+# the newer .debs, checks them against the release's SHA256SUMS.txt, and
+# installs them with apt, so dpkg still owns them and they uninstall cleanly.
+#
+#   craft-update            check, fetch, install (sudo for the install only)
+#   craft-update check      installed vs latest, one line per app
+#   craft-update fetch      download and verify what is newer; no root
+#   craft-update install    install what fetch left behind (sudo)
+#   craft-update count      pending updates as a number, for the bar
+#
+# A Craft package is one whose maintainer address is @storyteller.ai. GitHub's
+# unauthenticated API allows 60 calls an hour, so answers are cached for an
+# hour; `--fresh` ignores the cache.
+set -uo pipefail
+
+ORG=storytold
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/craft-update
+mkdir -p "$CACHE"
+case "$(dpkg --print-architecture)" in
+    amd64) ARCH=x86_64 ;; arm64) ARCH=aarch64 ;;
+    *) echo "craft-update: no Linux builds for $(dpkg --print-architecture)" >&2; exit 1 ;;
+esac
+FRESH=0
+for a in "$@"; do [ "$a" = --fresh ] && FRESH=1; done
+
+# "name version" for every installed Craft package.
+installed() {
+    dpkg-query -W -f='${Package}\t${Version}\t${Maintainer}\n' 2>/dev/null \
+        | awk -F'\t' '$3 ~ /@storyteller\.ai>/ { print $1, $2 }'
+}
+
+# Latest release tag for a repo (without the leading v), cached for an hour.
+latest() {
+    local pkg=$1 f="$CACHE/$1.latest"
+    if [ "$FRESH" = 0 ] && [ -s "$f" ] && [ -z "$(find "$f" -mmin +60)" ]; then
+        cat "$f"; return
+    fi
+    local tag
+    tag=$(curl -fsS --max-time 20 "https://api.github.com/repos/$ORG/$pkg/releases/latest" \
+          | python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("tag_name","").lstrip("v"))' 2>/dev/null)
+    [ -n "$tag" ] || { [ -s "$f" ] && cat "$f"; return; }
+    echo "$tag" | tee "$f"
+}
+
+# The dpkg version is "<ver>-1"; compare on the upstream part.
+pending() { # prints "pkg installed latest" for each app behind
+    installed | while read -r pkg ver; do
+        local l; l=$(latest "$pkg"); [ -n "$l" ] || continue
+        if dpkg --compare-versions "${ver%%-*}" lt "$l"; then echo "$pkg $ver $l"; fi
+    done
+}
+
+fetch() {
+    local any=0
+    while read -r pkg ver l; do
+        any=1
+        local deb="$pkg-$l-linux-$ARCH.deb" base="https://github.com/$ORG/$pkg/releases/download/v$l"
+        if [ -f "$CACHE/$deb.ok" ]; then echo "$pkg $l: already fetched"; continue; fi
+        echo "$pkg $ver -> $l: fetching $deb"
+        curl -fL --max-time 1800 --progress-bar -o "$CACHE/$deb" "$base/$deb" \
+            && curl -fsSL --max-time 60 -o "$CACHE/$pkg-SHA256SUMS.txt" "$base/SHA256SUMS.txt" \
+            && (cd "$CACHE" && grep -F " $deb" "$pkg-SHA256SUMS.txt" | sha256sum -c --quiet -) \
+            && touch "$CACHE/$deb.ok" \
+            || { echo "craft-update: $pkg: download or checksum failed" >&2; rm -f "$CACHE/$deb" "$CACHE/$deb.ok"; }
+    done < <(pending)
+    [ "$any" = 1 ] || echo "All Craft apps are current."
+}
+
+install_fetched() {
+    local debs=()
+    for ok in "$CACHE"/*.deb.ok; do [ -e "$ok" ] && debs+=("${ok%.ok}"); done
+    [ ${#debs[@]} -gt 0 ] || { echo "Nothing fetched to install."; return 0; }
+    echo "Installing ${#debs[@]} package(s) with apt (sudo)..."
+    if sudo apt-get install -y "${debs[@]}"; then
+        rm -f "${debs[@]}" "${debs[@]/%/.ok}" "$CACHE"/*-SHA256SUMS.txt
+        echo "Done."
+        pkill -RTMIN+7 waybar 2>/dev/null    # refresh the bar's update count
+    else
+        echo "craft-update: apt failed; the .debs are kept in $CACHE" >&2; return 1
+    fi
+}
+
+case "${1:-all}" in
+    check)
+        installed | while read -r pkg ver; do
+            l=$(latest "$pkg")
+            if [ -z "$l" ]; then s="(GitHub unreachable)"
+            elif dpkg --compare-versions "${ver%%-*}" lt "$l"; then s="-> $l available"
+            else s="current"; fi
+            printf '%-12s %-8s %s\n' "$pkg" "${ver%%-*}" "$s"
+        done ;;
+    count)    pending | wc -l ;;
+    fetch)    fetch ;;
+    install)  install_fetched ;;
+    all|--fresh) fetch && install_fetched ;;
+    *) echo "usage: craft-update [check|fetch|install|count] [--fresh]" >&2; exit 2 ;;
+esac
