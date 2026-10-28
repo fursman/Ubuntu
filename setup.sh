@@ -216,6 +216,18 @@ if [ "$CLAUDE_REPO_OK" = 1 ]; then
         sudo usermod -aG kvm "$USER"
         info "Added $USER to kvm group (re-login required for Claude's Cowork tab)"
     fi
+
+    # Electron picks its secret store from XDG_CURRENT_DESKTOP and only knows
+    # GNOME/KDE-style desktops; under Hyprland it falls back to basic_text, so
+    # sign-ins never persist. This wrapper shadows /usr/bin/claude-desktop on
+    # PATH, which covers the SUPER+C bind, the rofi entry and claude:// links.
+    sudo tee /usr/local/bin/claude-desktop >/dev/null <<'CLAUDEEOF'
+#!/bin/sh
+# Installed by setup.sh: use GNOME Keyring, not plaintext, for app secrets.
+exec /usr/bin/claude-desktop --password-store=gnome-libsecret "$@"
+CLAUDEEOF
+    sudo chmod 0755 /usr/local/bin/claude-desktop
+    info "Claude desktop set to store secrets in GNOME Keyring"
 fi
 
 success "Packages installed"
