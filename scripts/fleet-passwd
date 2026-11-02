@@ -15,9 +15,9 @@
 # Every machine is checked with the current password before any is changed,
 # so a typo or an unreachable machine stops it before the passwords diverge.
 #
-# This changes the account password only. GNOME Keyring's login keyring keeps
-# the old one: on a desktop machine, the next login asks for it once (or
-# change it in Passwords and Keys > Login > Change Password).
+# GNOME Keyring's login keyring is changed with it where there is one, so the
+# next login still unlocks it. A keyring whose password was already something
+# else is left alone and named at the end; the account is changed regardless.
 
 set -u
 
@@ -33,6 +33,58 @@ assistant  assistant.local
 
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new)
 
+# The login keyring, through gnome-keyring's own D-Bus interface: the call
+# Passwords and Keys makes, minus the dialog. It checks the old password even
+# when the keyring is unlocked (an unlock call would not), so "check" (stdin:
+# current password) changes it to itself, and "change" (stdin: current, new)
+# changes it and then changes the new one to itself to prove it took. Nothing
+# is ever locked, so apps in a logged-in session do not notice.
+# Exit 3 means the keyring was not touched or not proven; never fatal.
+KR_PY='
+import sys
+try:
+    from gi.repository import Gio, GLib
+except ImportError:
+    print("keyring left alone: no python3-gi"); sys.exit(3)
+mode = sys.argv[1]
+cur = sys.stdin.readline().rstrip("\n")
+new = sys.stdin.readline().rstrip("\n") if mode == "change" else ""
+SVC = "/org/freedesktop/secrets"
+COLL = SVC + "/collection/login"
+G = "org.gnome.keyring.InternalUnsupportedGuiltRiddenInterface"
+S = "org.freedesktop.Secret.Service"
+try:
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+    def call(iface, method, sig, args, rtype):
+        return bus.call_sync("org.freedesktop.secrets", SVC, iface, method, GLib.Variant(sig, args),
+                             GLib.VariantType(rtype), 0, 15000, None).unpack()
+    _, session = call(S, "OpenSession", "(sv)", ("plain", GLib.Variant("s", "")), "(vo)")
+    secret = lambda pw: (session, b"", pw.encode(), "text/plain")
+    change = lambda a, b: call(G, "ChangeWithMasterPassword", "(o(oayays)(oayays))",
+                               (COLL, secret(a), secret(b)), "()")
+    if mode == "check":
+        change(cur, cur)
+        print("keyring opens with it"); sys.exit(0)
+    change(cur, new)
+    change(new, new)
+    print("keyring changed, verified")
+except GLib.Error as e:
+    if "Denied" in e.message:
+        print("keyring has a different password, left alone")
+    else:
+        print("keyring left alone: " + e.message.split(": ", 1)[-1])
+    sys.exit(3)
+'
+
+# Shared by the scripts below: run KR_PY on the login keyring, if any.
+KEYRING='
+keyring() {
+    [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/keyrings/login.keyring" ] || { echo "no login keyring"; return 0; }
+    export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}
+    python3 -I -c "$KR_PY" "$1" 2>/dev/null
+}
+'
+
 # Runs on each machine. stdin: current password, then the new one.
 # Where sudo needs no password (blade13) the current one is unused.
 REMOTE='
@@ -40,23 +92,36 @@ IFS= read -r cur; IFS= read -r new
 me=$(id -un)
 if sudo -n true 2>/dev/null; then
     printf "%s:%s\n" "$me" "$new" | sudo chpasswd || exit 1
-    echo "changed"
+    acct="changed"
 else
     { printf "%s\n" "$cur"; printf "%s:%s\n" "$me" "$new"; } | sudo -S -p "" chpasswd 2>/dev/null || exit 1
     sudo -k
-    printf "%s\n" "$new" | sudo -S -p "" -v 2>/dev/null && echo "changed, verified" || { echo "changed, but sudo rejects the new password"; exit 1; }
+    printf "%s\n" "$new" | sudo -S -p "" -v 2>/dev/null && acct="changed, verified" || { echo "changed, but sudo rejects the new password"; exit 1; }
 fi
+kr=$(printf "%s\n%s\n" "$cur" "$new" | keyring change); krs=$?
+echo "$acct; $kr"
+[ $krs = 0 ] || exit 3
 '
 
 # Runs on each machine before anything changes. stdin: the current password.
 PREFLIGHT='
 IFS= read -r cur
-if sudo -n true 2>/dev/null; then echo "ok (sudo needs no password)"; exit 0; fi
-sudo -k
-printf "%s\n" "$cur" | sudo -S -p "" -v 2>/dev/null && echo "ok" || { echo "sudo rejects the current password"; exit 1; }
+if sudo -n true 2>/dev/null; then acct="ok (sudo needs no password)"
+else
+    sudo -k
+    printf "%s\n" "$cur" | sudo -S -p "" -v 2>/dev/null && acct="ok" || { echo "sudo rejects the current password"; exit 1; }
+fi
+echo "$acct; $(printf "%s\n" "$cur" | keyring check)"
 '
 
-CHECK='sudo -n true 2>/dev/null && echo "reachable, sudo needs no password" || echo "reachable, sudo needs a password"'
+CHECK='sudo -n true 2>/dev/null && s="no password" || s="a password"
+[ -f "${XDG_DATA_HOME:-$HOME/.local/share}/keyrings/login.keyring" ] && k="login keyring" || k="no login keyring"
+echo "reachable, sudo needs $s; $k"'
+
+# Each script gets the keyring helper in front of it.
+prelude="KR_PY=$(printf %q "$KR_PY")"$'\n'"$KEYRING"
+REMOTE=$prelude$REMOTE
+PREFLIGHT=$prelude$PREFLIGHT
 
 me=$(hostname -s | tr "[:upper:]" "[:lower:]")
 
@@ -127,17 +192,25 @@ fi
 
 echo
 echo "Changing:"
-failed=()
+failed=(); keyrings=()
 for i in "${!names[@]}"; do
     printf "  %-11s " "${names[$i]}"
-    if out=$(printf "%s\n%s\n" "$cur" "$new" | run "$i" "$REMOTE"); then echo "$out"
-    else echo "FAILED${out:+: $out}"; failed+=("${names[$i]}"); fi
+    out=$(printf "%s\n%s\n" "$cur" "$new" | run "$i" "$REMOTE"); rc=$?
+    case $rc in
+        0) echo "$out" ;;
+        3) echo "$out"; keyrings+=("${names[$i]}") ;;
+        *) echo "FAILED${out:+: $out}"; failed+=("${names[$i]}") ;;
+    esac
 done
 unset cur new again
 
 echo
+if [ ${#keyrings[@]} -gt 0 ]; then
+    echo "Keyring not changed on: ${keyrings[*]} -- the next login there asks for its old password once"
+    echo "(or change it in Passwords and Keys > Login > Change Password)."
+fi
 if [ ${#failed[@]} -gt 0 ]; then
     echo "Failed on: ${failed[*]} -- those still have the old password."
     exit 1
 fi
-echo "Done. Desktop machines will ask for the old password once at next login to unlock the keyring."
+echo "Done."
