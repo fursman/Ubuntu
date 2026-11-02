@@ -356,6 +356,7 @@ group("Assistant")
 bind("SUPER + SUPER_L",           "Voice mode on/off (tap Super)", "kill -USR1 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)", { release = true })
 bind(mainMod .. " + SHIFT + A",   "New conversation",              "kill -USR2 $(cat ~/.local/state/voice-assistant/voice-assistant.pid)")
 bind(mainMod .. " + M",           "Swap model",                    "~/.local/bin/assistant --swap")
+bind(mainMod .. " + SHIFT + M",   "Speech: local ⇄ network",       "~/.local/bin/assistant --speech toggle")
 bind(mainMod .. " + CTRL + V",    "Only my voice on/off",          "~/.local/bin/assistant --voice-only toggle")
 bind(mainMod .. " + A",           "Conversation panel",            "~/.local/bin/assistant-panel-toggle")
 

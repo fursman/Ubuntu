@@ -268,6 +268,7 @@ workspaces, and the media/volume/brightness keys drive SwayOSD.
 | `Super (tap)` | Voice mode on/off (tap Super) |
 | `Super + Shift + A` | New conversation |
 | `Super + M` | Swap model |
+| `Super + Shift + M` | Speech: local ⇄ network |
 | `Super + Ctrl + V` | Only my voice on/off |
 | `Super + A` | Conversation panel |
 
