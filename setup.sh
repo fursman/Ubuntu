@@ -79,8 +79,21 @@ apt_need() {
         dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q '^install ok installed$' \
             || missing+=("$p")
     done
+    # A package this release's archive lacks (rofimoji on 25.10) is skipped
+    # with a warning instead of failing the whole install; whatever calls it
+    # already says so when it is missing.
+    local available=() skipped=()
+    for p in "${missing[@]}"; do
+        if out_matches '^ *Candidate: [^(]' apt-cache policy "$p"; then
+            available+=("$p")
+        else
+            skipped+=("$p")
+        fi
+    done
+    [ ${#skipped[@]} -eq 0 ] || warn "not in this release's archive, skipped: ${skipped[*]}"
+    missing=("${available[@]}")
     if [ ${#missing[@]} -eq 0 ]; then
-        info "already installed: $*"
+        [ ${#skipped[@]} -gt 0 ] || info "already installed: $*"
     else
         info "installing: ${missing[*]}"
         "${APT_GET[@]}" install "${missing[@]}"
