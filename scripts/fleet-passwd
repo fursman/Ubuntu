@@ -1,0 +1,142 @@
+#!/bin/bash
+# Change the login password of `user` on every Ubuntu machine on the LAN at
+# once, over the SSH keys they already share. Run it on assistant.
+#
+#   fleet-passwd            check every machine, then change them all
+#   fleet-passwd --check    only check: reachable, and whether sudo needs a password
+#   fleet-passwd block pile only these machines (e.g. one that was off last time)
+#
+# Machines come from ~/.config/fleet-hosts (one per line, "name host", # for
+# comments) when it exists, else the list below. The machine it runs on is
+# changed locally rather than over SSH (assistant has no key for itself).
+#
+# Passwords are read without echo and travel only on stdin, inside the SSH
+# connection: never in an argument (visible in ps), a file, or shell history.
+# Every machine is checked with the current password before any is changed,
+# so a typo or an unreachable machine stops it before the passwords diverge.
+#
+# This changes the account password only. GNOME Keyring's login keyring keeps
+# the old one: on a desktop machine, the next login asks for it once (or
+# change it in Passwords and Keys > Login > Change Password).
+
+set -u
+
+DEFAULT_HOSTS="
+blade17    blade17.local
+blade13    blade13.local
+macbookpro MacBookPro14-1.local
+block      block.local
+pile       pile.local
+assistant  assistant.local
+"
+
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new)
+
+# Runs on each machine. stdin: current password, then the new one.
+# Where sudo needs no password (blade13) the current one is unused.
+REMOTE='
+IFS= read -r cur; IFS= read -r new
+me=$(id -un)
+if sudo -n true 2>/dev/null; then
+    printf "%s:%s\n" "$me" "$new" | sudo chpasswd || exit 1
+    echo "changed"
+else
+    { printf "%s\n" "$cur"; printf "%s:%s\n" "$me" "$new"; } | sudo -S -p "" chpasswd 2>/dev/null || exit 1
+    sudo -k
+    printf "%s\n" "$new" | sudo -S -p "" -v 2>/dev/null && echo "changed, verified" || { echo "changed, but sudo rejects the new password"; exit 1; }
+fi
+'
+
+# Runs on each machine before anything changes. stdin: the current password.
+PREFLIGHT='
+IFS= read -r cur
+if sudo -n true 2>/dev/null; then echo "ok (sudo needs no password)"; exit 0; fi
+sudo -k
+printf "%s\n" "$cur" | sudo -S -p "" -v 2>/dev/null && echo "ok" || { echo "sudo rejects the current password"; exit 1; }
+'
+
+CHECK='sudo -n true 2>/dev/null && echo "reachable, sudo needs no password" || echo "reachable, sudo needs a password"'
+
+me=$(hostname -s | tr "[:upper:]" "[:lower:]")
+
+hosts_file=~/.config/fleet-hosts
+if [ -r "$hosts_file" ]; then list=$(cat "$hosts_file"); else list=$DEFAULT_HOSTS; fi
+
+check_only=0
+want=()
+for a in "$@"; do
+    case $a in
+        --check) check_only=1 ;;
+        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) want+=("$a") ;;
+    esac
+done
+
+names=(); addrs=()
+while read -r name host _; do
+    [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
+    if [ ${#want[@]} -gt 0 ]; then
+        hit=0; for w in "${want[@]}"; do [ "$w" = "$name" ] && hit=1; done
+        [ $hit = 1 ] || continue
+    fi
+    names+=("$name"); addrs+=("${host:-$name}")
+done <<< "$list"
+[ ${#names[@]} -gt 0 ] || { echo "No machines match: ${want[*]}" >&2; exit 2; }
+
+# run INDEX SCRIPT: the script on that machine, stdin passed through.
+run() {
+    local n=${names[$1]} h=${addrs[$1]}
+    local short; short=$(tr "[:upper:]" "[:lower:]" <<< "${h%%.*}")
+    if [ "$(tr "[:upper:]" "[:lower:]" <<< "$n")" = "$me" ] || [ "$short" = "$me" ]; then
+        bash -c "$2"
+    else
+        ssh "${SSH_OPTS[@]}" "$h" "bash -c $(printf %q "$2")" 2>/dev/null
+    fi
+}
+
+if [ $check_only = 1 ]; then
+    for i in "${!names[@]}"; do
+        printf "%-11s " "${names[$i]}"
+        out=$(run "$i" "$CHECK" < /dev/null) && echo "$out" || echo "UNREACHABLE (${addrs[$i]})"
+    done
+    exit 0
+fi
+
+read -rsp "Current password: " cur; echo
+read -rsp "New password: " new; echo
+read -rsp "New password again: " again; echo
+[ "$new" = "$again" ] || { echo "The new passwords differ; nothing changed." >&2; exit 1; }
+[ -n "$new" ] || { echo "Empty password; nothing changed." >&2; exit 1; }
+[ "$new" != "$cur" ] || { echo "That is the current password; nothing changed." >&2; exit 1; }
+
+echo
+echo "Checking:"
+bad=()
+for i in "${!names[@]}"; do
+    printf "  %-11s " "${names[$i]}"
+    if out=$(printf "%s\n" "$cur" | run "$i" "$PREFLIGHT"); then echo "$out"
+    else echo "${out:-UNREACHABLE (${addrs[$i]})}"; bad+=("${names[$i]}"); fi
+done
+if [ ${#bad[@]} -gt 0 ]; then
+    echo
+    echo "Not changing anything: ${bad[*]} failed the check."
+    echo "Leave them out by naming the rest, e.g.: fleet-passwd $(printf '%s ' "${names[@]}" | tr ' ' '\n' | grep -vxF -f <(printf '%s\n' "${bad[@]}") | tr '\n' ' ')"
+    exit 1
+fi
+
+echo
+echo "Changing:"
+failed=()
+for i in "${!names[@]}"; do
+    printf "  %-11s " "${names[$i]}"
+    if out=$(printf "%s\n%s\n" "$cur" "$new" | run "$i" "$REMOTE"); then echo "$out"
+    else echo "FAILED${out:+: $out}"; failed+=("${names[$i]}"); fi
+done
+unset cur new again
+
+echo
+if [ ${#failed[@]} -gt 0 ]; then
+    echo "Failed on: ${failed[*]} -- those still have the old password."
+    exit 1
+fi
+echo "Done. Desktop machines will ask for the old password once at next login to unlock the keyring."

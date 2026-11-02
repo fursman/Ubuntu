@@ -453,6 +453,7 @@ Weather comes from wttr.in, which guesses the place from your IP. Pin one with
     ├── wallpaper-set            # Set + remember the wallpaper
     ├── bar-status               # Waybar: date + calendar, weather, updates
     ├── emoji-picker, reminder, webapp-install, wifi-qr, launch-tui
+    ├── fleet-passwd             # Change the password on every machine on the LAN at once, over SSH (run on assistant)
     ├── lock-screen
     ├── wireless-display
     ├── keyboard-fire            # Razer per-key RGB flame effect (openrazer)
