@@ -26,7 +26,10 @@ pgrep -x screensaver-run >/dev/null && exit 0
 pgrep -x hyprlock >/dev/null && exit 0
 
 # Font sized to the panel, so the banner fills a similar share of any screen.
-hyprctl monitors -j | jq -r '.[] | select(.dpmsStatus) | "\(.name) \(.width / .scale) \(.height / .scale)"' |
+# Real panels only: a headless output (no make or model, e.g. the hidden screen that
+# feeds the TV) keeps showing what it shows. A screensaver window there also knocked the
+# TV's dashboard out of full-screen every time it ran (2026-11-11).
+hyprctl monitors -j | jq -r '.[] | select(.dpmsStatus) | select(((.make // "") + (.model // "")) != "") | "\(.name) \(.width / .scale) \(.height / .scale)"' |
 while read -r mon w h; do
     size=$(awk -v w="$w" -v h="$h" 'BEGIN{ s = w / 130; if (h / 22 < s) s = h / 22; printf "%d", (s < 12 ? 12 : s) }')
     hyprctl dispatch "hl.dsp.focus({ monitor = \"$mon\" })" >/dev/null
