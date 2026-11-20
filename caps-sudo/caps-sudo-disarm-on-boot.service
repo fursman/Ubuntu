@@ -1,11 +1,18 @@
 [Unit]
 Description=Disarm caps-sudo passwordless sudo at boot (never let it survive a reboot)
 DefaultDependencies=no
+# The root filesystem is still read-only this early. Without waiting for the
+# remount the first try failed ("Read-only file system") and the file was only
+# removed because systemd happened to run the unit again a few seconds later.
+Wants=systemd-remount-fs.service
+After=systemd-remount-fs.service
 Before=sysinit.target
 ConditionPathExists=/usr/local/sbin/caps-sudo
 
 [Service]
 Type=oneshot
+# A oneshot has no start timeout by default, and this runs before sysinit.
+TimeoutStartSec=15
 ExecStart=/usr/local/sbin/caps-sudo disarm
 
 [Install]

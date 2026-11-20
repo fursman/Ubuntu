@@ -78,6 +78,9 @@ user_env(){
 }
 
 notify(){
+  # Nobody to tell before the user's session exists (the boot-time disarm),
+  # and nothing started that early should be able to hold up the boot.
+  [ -d "$(user_runtime)" ] || return 0
   # shellcheck disable=SC2046
   sudo -u "$TARGET_USER" env $(user_env) \
     notify-send -a caps-sudo -- "$1" "${2:-}" 2>/dev/null || true
@@ -94,7 +97,9 @@ EOF
   chmod 0440 "$tmp"
   if visudo -cf "$tmp" >/dev/null 2>&1; then
     mv "$tmp" "$ARMED_FILE"
-    led_on
+    # The light is an indicator, never a reason to stop: where no LED holds
+    # the value (applespi, or no LED nodes yet), still notify and log.
+    led_on || true
     notify "🔓 sudo ARMED" "Passwordless sudo is LIVE — tap CapsLock to disarm."
     log "armed by $TARGET_USER"
   else
@@ -107,7 +112,9 @@ EOF
 
 disarm(){
   rm -f "$ARMED_FILE"
-  led_off
+  # At boot there are no LED nodes yet; under set -e a bare led_off ended the
+  # script here, so the boot unit showed failed and "disarmed" was never logged.
+  led_off || true
   notify "🔒 sudo disarmed" "Password-protected sudo restored."
   log "disarmed"
 }
