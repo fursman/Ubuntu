@@ -224,7 +224,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("~/.local/bin/awww-daemon")
     hl.exec_cmd("sleep 3; " .. WALLPAPER)
     hl.exec_cmd("swayosd-server")
-    hl.exec_cmd("swaync")
+    -- swaync is not started here: its own user service starts it on demand
+    -- (D-Bus activation, first asked for by the bar). Starting it here as
+    -- well made that service lose the race and show as failed at every login.
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     hl.exec_cmd(IDLE)
