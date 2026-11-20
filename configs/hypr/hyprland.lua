@@ -316,8 +316,19 @@ for i = 1, 10 do
 end
 
 ------------------------------------------------- SPECIAL WORKSPACES --------
-hl.workspace_rule({ workspace = "special:scratchpad", on_created_empty = "kitty --class scratchpad" })
-hl.workspace_rule({ workspace = "special:music",      on_created_empty = "kitty --class scratchpad -e playerctl metadata --follow" })
+-- Opening one of these while it is empty starts its program there. This used
+-- to be the on_created_empty workspace rule, which Hyprland 0.57.2 deprecates
+-- in favour of a handler for "workspace.created".
+local SPECIAL_STARTS = {
+    ["special:scratchpad"] = "kitty --class scratchpad",
+    ["special:music"]      = "kitty --class scratchpad -e playerctl metadata --follow",
+}
+hl.on("workspace.created", function(ws)
+    local cmd = SPECIAL_STARTS[ws.name]
+    if cmd and ws.is_empty then
+        hl.exec_cmd(cmd, { workspace = ws.name })
+    end
+end)
 
 --------------------------------------------------------------- KEYBINDINGS --
 -- Every bind carries a description, "Section › What it does". hypr-cheatsheet
